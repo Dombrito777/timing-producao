@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timing de Produção</title>
+<style>
+  :root {
+    --bg: #F7F7F8; --surface: #FFFFFF; --border: #E5E5E7; --text: #1A1A1A; --text-sec: #6B6B6B;
+    --green: #1D9E75; --green-bg: #E6F5EF; --amber: #D4860A; --amber-bg: #FDF3DC;
+    --red: #C0392B; --red-bg: #FBEAEA; --blue: #1A6FC4; --blue-bg: #E8F0FB;
+    --purple: #5B3FC8; --purple-bg: #EFECFC;
+    --fashion-bg: #EFECFC; --fashion-c: #3C3489; --kids-bg: #E1F5EE; --kids-c: #085041;
+    --shoes-bg: #FAECE7; --shoes-c: #712B13; --home-bg: #FDF3DC; --home-c: #633806;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  .app { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header-sub { font-size: 13px; color: var(--text-sec); margin-top: 2px; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+  .tab { padding: 10px 16px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; background: none; color: var(--text-sec); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: var(--text); border-bottom-color: var(--text); }
+  .page { display: none; } .page.active { display: block; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .metric-label { font-size: 12px; color: var(--text-sec); margin-bottom: 6px; }
+  .metric-value { font-size: 26px; font-weight: 600; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; padding: 8px 10px; color: var(--text-sec); font-weight: 500; border-bottom: 1px solid var(--border); }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  td.trunc { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { display: inline-flex; align-items: center; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+  .b-green { background: var(--green-bg); color: var(--green); }
+  .b-amber { background: var(--amber-bg); color: var(--amber); }
+  .b-red { background: var(--red-bg); color: var(--red); }
+  .b-blue { background: var(--blue-bg); color: var(--blue); }
+  .b-purple { background: var(--purple-bg); color: var(--purple); }
+  .b-gray { background: var(--bg); color: var(--text-sec); }
+  .b-fashion { background: var(--fashion-bg); color: var(--fashion-c); }
+  .b-kids { background: var(--kids-bg); color: var(--kids-c); }
+  .b-shoes { background: var(--shoes-bg); color: var(--shoes-c); }
+  .b-home { background: var(--home-bg); color: var(--home-c); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
+  .btn-primary { background: var(--text); color: #fff; }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .analyst-block { margin-bottom: 20px; }
+  .analyst-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .analyst-name { font-size: 14px; font-weight: 600; }
+  .analyst-sub { font-size: 12px; color: var(--text-sec); margin-top: 1px; }
+  .cap-bar-wrap { height: 5px; background: var(--bg); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+  .cap-bar { height: 100%; border-radius: 3px; }
+  .cap-ok { background: var(--green); } .cap-warn { background: var(--amber); } .cap-full { background: var(--red); }
+  .step-bar { display: flex; margin-bottom: 24px; }
+  .step { flex: 1; text-align: center; padding: 8px 4px; font-size: 12px; color: var(--text-sec); border-bottom: 2px solid var(--border); }
+  .step.done { color: var(--green); border-bottom-color: var(--green); }
+  .step.current { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
+  .alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+  .alert-warn { background: var(--amber-bg); color: var(--amber); border: 1px solid #F0D080; }
+  .alert-red { background: var(--red-bg); color: var(--red); border: 1px solid #EDBBBB; }
+  .alert-green { background: var(--green-bg); color: var(--green); }
+  .loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 40px; color: var(--text-sec); font-size: 13px; }
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--text); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty { text-align: center; padding: 30px; color: var(--text-sec); font-size: 13px; }
+  .success-box { text-align: center; padding: 40px 20px; }
+  .sec-tag { display: inline-flex; font-size: 10px; padding: 1px 6px; border-radius: 10px; background: var(--bg); color: var(--text-sec); margin-left: 4px; vertical-align: middle; }
+  #log { background: #1A1A1A; color: #88EE88; font-family: monospace; font-size: 11px; padding: 12px; border-radius: 8px; max-height: 200px; overflow-y: auto; margin-top: 12px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div><h1>⏱ Timing de Produção</h1><div class="header-sub" id="header-date">Carregando...</div></div>
+    <button class="btn btn-secondary" onclick="carregarDados()">↺ Atualizar dados</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('visao')">Visão geral</button>
+    <button class="tab" onclick="showTab('plotar')">Plotar timing</button>
+    <button class="tab" onclick="showTab('analistas')">Analistas</button>
+    <button class="tab" onclick="showTab('debug')">🔍 Debug</button>
+  </div>
+
+  <div id="tab-visao" class="page active">
+    <div id="visao-loading" class="loading"><div class="spinner"></div> Conectando ao Google Sheets...</div>
+    <div id="visao-content" style="display:none">
+      <div class="metrics" id="metrics"></div>
+      <div class="card">
+        <div class="card-title">Campanhas com material liberado</div>
+        <table><thead><tr>
+          <th style="width:8%">ID</th><th style="width:18%">Campanha</th><th style="width:9%">SD</th><th style="width:8%">Fiab</th>
+          <th style="width:16%">Processo</th><th style="width:10%">Qtd</th><th style="width:14%">Diretoria</th><th style="width:11%">Status</th>
+        </tr></thead><tbody id="tbody-camp"></tbody></table>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="showTab('plotar')">Gerar timing automático →</button></div>
+    </div>
+    <div id="visao-error" style="display:none" class="alert alert-red"></div>
+  </div>
+
+  <div id="tab-plotar" class="page">
+    <div class="step-bar">
+      <div class="step done" id="s1">1. Dados carregados</div>
+      <div class="step current" id="s2">2. Revisar sugestão</div>
+      <div class="step" id="s3">3. Aprovar</div>
+    </div>
+    <div id="plotar-review">
+      <div class="alert alert-warn">⚠️ Quebras do dia anterior já descontadas da capacidade de cada analista.</div>
+      <div class="card-title">Validação — Imagem</div>
+      <div id="blocks-val"></div>
+      <div class="card-title" style="margin-top:20px">Subida + Desc + Repeteco</div>
+      <div id="blocks-sub"></div>
+      <div class="card-title" style="margin-top:20px;color:var(--text-sec);font-size:13px">Não alocadas</div>
+      <div class="card" style="padding:10px 14px">
+        <table><thead><tr><th>Campanha</th><th>Processo</th><th>Qtd</th><th>Motivo</th></tr></thead>
+        <tbody id="tbody-nao"></tbody></table>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-aprovar" onclick="aprovar()">✓ Aprovar e exportar para Sheets</button>
+      </div>
+    </div>
+    <div id="plotar-ok" style="display:none">
+      <div class="success-box">
+        <div style="font-size:48px">✅</div>
+        <div style="font-size:18px;font-weight:600;margin-top:12px">Timing exportado!</div>
+        <div style="font-size:13px;color:var(--text-sec);margin-top:6px">As linhas foram adicionadas na planilha de timing.</div>
+        <div class="btn-row" style="justify-content:center;margin-top:20px">
+          <button class="btn btn-secondary" onclick="resetAprovar()">← Voltar</button>
+        </div>
+      </div>
+    </div>
+    <div id="log" style="display:none"></div>
+  </div>
+
+  <div id="tab-debug" class="page">
+    <div class="card">
+      <div class="card-title">Inspecionar linha da planilha</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">
+        <input type="number" id="debug-linha" placeholder="Ex: 1916" style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:14px;width:140px;">
+        <button class="btn btn-primary" onclick="inspecionarLinha()">Inspecionar</button>
+      </div>
+      <div id="debug-resultado"></div>
+    </div>
+  </div>
+
+  <div id="tab-analistas" class="page">
+    <div class="card"><div class="card-title">Validação</div>
+      <table><thead><tr><th>Nome</th><th>Cap./dia</th><th>Quebras hoje</th><th>Disponível</th></tr></thead>
+      <tbody id="tbody-aval"></tbody></table>
+    </div>
+    <div class="card"><div class="card-title">Subida + Desc + Repeteco</div>
+      <table><thead><tr><th>Nome</th><th>Cap./dia</th><th>Quebras</th><th>Disponível</th><th>Principal</th><th>Secundárias</th></tr></thead>
+      <tbody id="tbody-asub"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CONFIGS ──────────────────────────────────────────────────────
+const CAL_ID = '12go0MjmJoOcnCGRRE-3x740Uh7V4JzPHvE8PFJfzzw4';
+const TIM_ID = '1PiJDBCXtioKFPBxoOZ_EHNoS8o2pdsQPGSiTvL153DQ';
+
+const CREDS_EMAIL = 'timming-app@cobalt-abacus-499712-q5.iam.gserviceaccount.com';
+const CREDS_KEY = `-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDSvjiD08DgKUcE
+cUfikUgqn7mWBTAQwI6oi2Xr94XnAqztWzMifz8sRlGjLVnCOr7YZkY2cMSVMdUv
+evvsr8Mm+2sJBZhL1BiLZR0B7xWenOsUqJRc2WJodB+AtiGQSh6vfhonbxen+SAY
+ZdFZx9Jt34sP/IvqxdC2RNmGuG72nB4zOjYL96PKyToNndPu+VQrAIfwFkgxFcse
+XuaQXNZedScW7O4HTZJv+oDVGRW7HVSsvyne0m1/4ojTYATrn36HAbXlpLRBnXyO
+0H+SnmskYI/pcqt0QTGj4EfjLHPLi9PelWa16zoCSY5bHalQYEPJOjiU5go5bRdo
+B607ImS7AgMBAAECggEAWKCx8NLZfwws9zPS2PhjYrWYnXxiCfGJLV2uh+2pbQ0l
+f47Gsv/TqAGMrLTSVkpRX32nkpabPelesCCnGROT3W2HxpwJP/6bMehcqicLrxBs
+FtyMxH2Rkr8fToiKFf3t6Lz+L85bIwO02T3crMbJ+vYzrA34I8x8aWMMHkmrNN+Q
+m24umGF/VbV3LrjLIA+rt9XJbZpJdXHWjNi1xNZLMhHI280k2T/Wdqzt8vvDxG1q
+YDXduu5c1bqtL3SYKQbuvaKZDMc/jcneAUFEAyNM41rXK3YUnyIthCprGJGVh42P
+C6yL2yDDyvEmqaNlzslYxesstq+cjWu87DhVCWyE+QKBgQDxVhK05UdvedndAq6d
+ilTEvF2K9qy3B94zAvxIxUt185bUJhQ4DyRJTThC1+JETyOfZRccgtoM9Li3Gxxu
+Jkey7vvDeWg44BlMzSbAa39HCud3Skpl8BvpA7//FE6z7IG5DHlscRDSJKFUEMej
+aRTM96qpOzhtoJyXMkLaU6e3KQKBgQDfjEc6f7rbJqk81p9yIK6cvzZ5ll54uKY2
+pJcAXXXiniPhVtduqfhw6uLIWUX4ONF8pKmsbaGPtqayYmjUUsxtHMhdGtz4w3sh
+4h0rjsRgFP+jIrb4zB438fPA925npRa9mKtiY69B8JGU8RHwr/CKTGKmU4WKKMkM
+Y8WCQFltQwKBgQCB7mlb4yU2q0/UYaFJSDSjRxbFvlD2qdHDfRP+ydn6ww6tYWL5
+W42ZuW1U743uYP04z+BFhV2IJCley8Xet9VaTLhXYYHvPRfh9YGrjzSTNxevbdvo
+TgF4zoAMAQ7uZ6Lf0gt9itIXkYkaDX6uR+DfCWhkfHHA8/vam0DK8scVIQKBgBc/
+AB0uMSEe6RRhgR0eFupH3ANSxqopEWe3P9iS33JcXYDORgLE/AfJ9SE+X09LoUUj
+3l0G3XkTVkxQfXQu1AE4sAE2jOn1cfV5DO19oCAZrueo8Xv3xeCtcVqMoFd4zF+U
+46WMlin2OT1SwDnWId5PySZgow9V5Go8acp8pI//AoGBAO1N9g+jBraen6unDFbz
+tAgXVN/qFYSt093K6xmqHM8QFu6W6Q2PL+4wXH/ctGYWMVoRvHjoNom6e8iYfhrw
+M4zcmpYqQ1xW0+lyxJ3UYYr4QXXhpjtkVkE/fhVfindHJnPt+AZCuO0m48yoWhgo
+iG5WGsVUzCF2n16K4TFmoOt0
+-----END PRIVATE KEY-----`;
+
+// ── ANALISTAS ────────────────────────────────────────────────────
+const ANALISTAS_VAL = [
+  {nome:'Danilo',cap:400},{nome:'João',cap:400},{nome:'Luana',cap:400},{nome:'Matheus',cap:400}
+];
+const ANALISTAS_SUB = [
+  {nome:'Acsa',cap:2,principal:'Home & Decor',sec:['Fashion','Shoes']},
+  {nome:'Amanda',cap:2,principal:'Fashion',sec:['Kids']},
+  {nome:'Izabelle',cap:2,principal:'Fashion',sec:['Shoes']},
+  {nome:'Jonathan',cap:2,principal:'Shoes',sec:['Kids']},
+  {nome:'Lari',cap:2,principal:'Kids',sec:['Fashion']},
+  {nome:'Manu',cap:2,principal:'Kids',sec:['Shoes']},
+  {nome:'Millena',cap:2,principal:'Fashion',sec:['Home & Decor']},
+  {nome:'Roberto',cap:2,principal:'Home & Decor',sec:['Fashion']},
+  {nome:'Thai',cap:2,principal:'Shoes',sec:['Home & Decor']},
+  {nome:'Vitoria',cap:2,principal:'Fashion',sec:['Shoes']}
+];
+const DIR_CATS = {
+  'Fashion':['Atacado Feminino','Atacado Masculino','Bodywear','Fitness','Sports','Sul Brands','Sul Trends','Varejo Feminino','Varejo Masculino'],
+  'Kids':['Babycare','Kids Brands','Kids Shoes','Kids Trends'],
+  'Shoes':['Shoes Brands','Shoes Comfort','Shoes Men','Shoes Trends'],
+  'Home & Decor':['Accessories & Beauty','Bed & Bath','Decor & Furniture','Dining & Appliances','Houseware']
+};
+function getDir(cat) {
+  if (!cat) return '?';
+  for (const [dir,cats] of Object.entries(DIR_CATS))
+    if (cats.some(c=>c.toLowerCase().trim()===cat.toLowerCase().trim())) return dir;
+  return cat;
+}
+const AV_COLORS = [
+  {bg:'#EFECFC',c:'#3C3489'},{bg:'#E1F5EE',c:'#085041'},{bg:'#FAECE7',c:'#712B13'},
+  {bg:'#E8F0FB',c:'#0C447C'},{bg:'#FDF3DC',c:'#633806'},{bg:'#FBEAF0',c:'#72243E'},{bg:'#EAF3DE',c:'#27500A'}
+];
+function avc(i){return AV_COLORS[i%AV_COLORS.length];}
+function ini(n){return (n||'').trim().split(' ').filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');}
+function dbc(d){return {'Fashion':'b-fashion','Kids':'b-kids','Shoes':'b-shoes','Home & Decor':'b-home'}[d]||'b-gray';}
+
+// ── JWT / AUTH ────────────────────────────────────────────────────
+let _token=null, _tokenExp=0;
+
+function pemToArrayBuffer(pem) {
+  const b64 = pem.replace(/-----[^-]+-----/g,'').replace(/\s/g,'');
+  const bin = atob(b64);
+  const buf = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+  return buf.buffer;
+}
+
+function b64url(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  let str = '';
+  for (const b of bytes) str += String.fromCharCode(b);
+  return btoa(str).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+
+function jsonB64(obj) {
+  return b64url(new TextEncoder().encode(JSON.stringify(obj)));
+}
+
+async function getToken() {
+  if (_token && Date.now() < _tokenExp - 30000) return _token;
+  const now = Math.floor(Date.now()/1000);
+  const header = jsonB64({alg:'RS256',typ:'JWT'});
+  const payload = jsonB64({
+    iss: CREDS_EMAIL,
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now+3600, iat: now
+  });
+  const sigInput = header+'.'+payload;
+  const keyBuf = pemToArrayBuffer(CREDS_KEY);
+  const key = await crypto.subtle.importKey(
+    'pkcs8', keyBuf,
+    {name:'RSASSA-PKCS1-v1_5', hash:'SHA-256'},
+    false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(sigInput));
+  const jwt = sigInput+'.'+b64url(sig);
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:`grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error('Auth falhou: '+JSON.stringify(data));
+  _token = data.access_token;
+  _tokenExp = Date.now()+(data.expires_in*1000);
+  return _token;
+}
+
+async function sheetGet(id, range) {
+  const t = await getToken();
+  const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(range)}`,
+    {headers:{Authorization:'Bearer '+t}});
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
+  return d.values||[];
+}
+
+async function sheetMeta(id) {
+  const t = await getToken();
+  const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}`,
+    {headers:{Authorization:'Bearer '+t}});
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
+  return d;
+}
+
+async function sheetAppend(id, range, values) {
+  const t = await getToken();
+  const r = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    {method:'POST', headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+     body:JSON.stringify({values})}
+  );
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
+  return d;
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────
+function parseNum(v){return parseInt((v||'').toString().replace(/\D/g,''))||0;}
+function parsePct(v){return parseFloat((v||'').toString().replace('%','').replace(',','.'))||0;}
+function todayDMY(){const d=new Date();return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;}
+function todayDM(){const d=new Date();return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;}
+
+// ── DADOS GLOBAIS ─────────────────────────────────────────────────
+let campanhas=[], quebras=[], dist=null;
+
+// ── CARREGAR ──────────────────────────────────────────────────────
+async function carregarDados() {
+  document.getElementById('visao-loading').style.display='flex';
+  document.getElementById('visao-content').style.display='none';
+  document.getElementById('visao-error').style.display='none';
+  document.getElementById('log').style.display='none';
+  document.getElementById('log').textContent='';
+  try {
+    log('Autenticando...');
+    await getToken();
+    log('Autenticado!');
+
+    // Listar abas calendário
+    const calMeta = await sheetMeta(CAL_ID);
+    const calAbas = calMeta.sheets.map(s=>s.properties.title);
+    log('Abas calendário: '+calAbas.join(', '));
+    // Pegar aba principal (Planejamento ou primeira)
+    const calAba = calAbas.find(a=>a.toLowerCase().includes('planejamento'))||calAbas[0];
+    log('Usando: '+calAba);
+
+    // Ler A1:AZ600
+    const rows = await sheetGet(CAL_ID, `${calAba}!A1:AZ2000`);
+    log(`${rows.length} linhas lidas`);
+
+    // Índices absolutos: A=0, B=1, C=2, D=3...
+    // B=1:ID, C=2:SD, D=3:Camp, F=5:Fiab, H=7:Cat
+    // AF=31:QtdImg, AH=33:Link, AJ=35:StatusImg, AM=38:PlotarImg, AP=41:LibImg
+    // AR=43:QtdRep, AS=44:PlotarRep, AU=46:LibRep
+    // AY=50:DataEntregaMS, AZ=51:PlotadoMS
+    campanhas=[];
+    for (let r=3;r<rows.length;r++) {
+      const row=rows[r];
+      const id=(row[1]||'').trim(); if(!id||id==='ID') continue;
+      const camp=(row[3]||'').trim(); if(!camp) continue;
+      const fiab=parsePct(row[5]);
+      if(fiab<30) continue;
+      const sd=(row[2]||'').trim();
+      const cat=(row[7]||'').trim();
+      // Filtro AZ: já plotado no MS
+      const plotadoMS=(row[51]||'').trim().toUpperCase();
+      if(plotadoMS==='VERDADEIRO'||plotadoMS==='TRUE') continue;
+      // Imagem: AF>0 + AH tem link + AJ=OK + AM=PLOTAR
+      const qtdImg=parseNum(row[31]);   // AF
+      const link=(row[33]||'').trim();   // AH
+      const statusImg=(row[35]||'').trim().toUpperCase(); // AJ
+      const plotarImg=(row[38]||'').trim().toUpperCase(); // AM
+      const libImg=parseNum(row[41]);   // AP
+      // Repeteco: AR>0 + AS=PLOTAR
+      const qtdRep=parseNum(row[43]);   // AR
+      const plotarRep=(row[44]||'').trim().toUpperCase(); // AS
+      const libRep=parseNum(row[46]);   // AU
+      // AD = índice 29 (Liberado Produção Amostra)
+      const libAmostra=parseNum(row[29]);
+      const temImg = qtdImg>0 && !!link && statusImg==='OK' && plotarImg==='PLOTAR';
+      const temRep = qtdRep>0 && plotarRep==='PLOTAR';
+      const temSub = libImg>0 || libAmostra>0 || (qtdRep>0 && plotarRep==='PLOTADO');
+      if(!temImg && !temRep && !temSub) continue;
+      campanhas.push({id,sd,camp,fiab,cat,qtdImg,qtdRep,libImg,libRep,temImg,temRep,temSub,rowIndex:r+1});
+    }
+    log(`${campanhas.length} campanhas elegíveis`);
+
+    // Timing — quebras
+    try {
+      const timMeta = await sheetMeta(TIM_ID);
+      const timAbas = timMeta.sheets.map(s=>s.properties.title);
+      log('Abas timing: '+timAbas.join(', '));
+      const timAba = timAbas.find(a=>a.toLowerCase().includes('timing'))||timAbas[0];
+      log('Timing aba: '+timAba);
+      // Ler últimas 200 linhas do timing
+      const colA = await sheetGet(TIM_ID, `${timAba}!A1:A2500`);
+      const totalLinhas = colA.length;
+      const inicioLeitura = Math.max(3, totalLinhas - 199);
+      log('Lendo timing linhas '+inicioLeitura+' a '+totalLinhas);
+      const timHead = await sheetGet(TIM_ID, `${timAba}!A1:GK2`);
+      const timData = await sheetGet(TIM_ID, `${timAba}!A${inicioLeitura}:GK${totalLinhas}`);
+      const timRows = [...timHead, ...timData];
+      quebras = extrairQuebras(timRows);
+      }
+      log(`${quebras.length} quebras encontradas`);
+    } catch(e) {
+      log('Aviso quebras: '+e.message);
+      quebras=[];
+    }
+
+    renderVisao();
+    renderAnalistas();
+    renderDist();
+    document.getElementById('visao-loading').style.display='none';
+    document.getElementById('visao-content').style.display='block';
+    document.getElementById('header-date').textContent='Hoje — '+todayDMY();
+  } catch(e) {
+    log('ERRO: '+e.message);
+    document.getElementById('visao-loading').style.display='none';
+    const el=document.getElementById('visao-error');
+    el.style.display='block';
+    el.textContent='❌ '+e.message;
+    document.getElementById('log').style.display='block';
+    console.error(e);
+  }
+}
+
+function extrairQuebras(rows) {
+  const result=[];
+  if(!rows||rows.length<3) return result;
+
+  const STATUS_QUEBRA = [
+    'não iniciada','nao iniciada','em andamento','inviável','inviavel','quebra',
+    'falta p.o','falta po','excel ok - imagem pendente','imagem ok - excel pendente',
+    'excel pendente - imagem pendente','em conteúdo','em conteudo',
+    'revisão em out','revisao em out','sem imagem','aguardando validação','aguardando validacao'
+  ];
+
+  const nameRow = rows[0]||[];
+  const hdrRow  = rows[1]||[];
+
+  const blocos=[];
+  for(let c=0;c<hdrRow.length;c++){
+    if((hdrRow[c]||'').trim().toUpperCase()==='ID'){
+      let nome='';
+      for(let nc=c;nc<=c+10&&nc<nameRow.length;nc++){
+        const v=(nameRow[nc]||'').trim();
+        if(v&&v.length>2&&!v.includes('/')&&isNaN(v)){nome=v;break;}
+      }
+      if(!nome) continue;
+      blocos.push({nome, idCol:c, sdCol:c+1, campCol:c+2, jobCol:c+5, statCol:c+6});
+    }
+  }
+  log('Analistas no timing: '+blocos.map(a=>a.nome).join(', '));
+
+  for(const b of blocos){
+    for(let r=2;r<rows.length;r++){
+      const row=rows[r];
+      const id=(row[b.idCol]||'').trim(); if(!id) continue;
+      const status=(row[b.statCol]||'').trim().toLowerCase();
+      const job=(row[b.jobCol]||'').trim().toLowerCase();
+      if(!STATUS_QUEBRA.some(s=>status.includes(s))) continue;
+      const isVal=job.includes('valida')||job.includes('imagem')||job.includes('amostra');
+      const campNome=(row[b.campCol]||'').trim();
+      const campSD=(row[b.sdCol]||'').trim();
+      result.push({analista:b.nome, tipo:isVal?'val':'sub', qtd:1, campanha:id, campNome, campSD});
+    }
+  }
+  log(result.length+' quebras encontradas: '+result.slice(0,5).map(q=>q.analista+'/'+q.campanha).join(', '));
+  return result;
+}
+
+// ── RENDER ────────────────────────────────────────────────────────
+function renderVisao(){
+  document.getElementById('metrics').innerHTML=`
+    <div class="metric"><div class="metric-label">Campanhas elegíveis</div><div class="metric-value">${campanhas.length}</div></div>
+    <div class="metric"><div class="metric-label">Com imagem p/ validar</div><div class="metric-value">${campanhas.filter(c=>c.temImg).length}</div></div>
+    <div class="metric"><div class="metric-label">Para subida</div><div class="metric-value">${campanhas.filter(c=>c.temSub||c.temRep).length}</div></div>
+    <div class="metric"><div class="metric-label">Quebras ontem</div><div class="metric-value">${quebras.length}</div></div>`;
+  const sorted=[...campanhas].sort((a,b)=>{
+    const da=a.sd.split('/').slice(0,2).reverse().join('');
+    const db=b.sd.split('/').slice(0,2).reverse().join('');
+    return da.localeCompare(db)||b.fiab-a.fiab;
+  });
+  document.getElementById('tbody-camp').innerHTML=sorted.map(c=>{
+    const dir=getDir(c.cat);
+    const procs=[];
+    if(c.temImg) procs.push('<span class="badge b-blue">Imagem</span>');
+    if(c.temRep) procs.push('<span class="badge b-purple">Repeteco</span>');
+    if(c.temSub) procs.push('<span class="badge b-green">Subida</span>');
+    const qtd=c.temImg?c.qtdImg+' refs':c.qtdRep?c.qtdRep+' refs':'—';
+    return `<tr>
+      <td>${c.id}</td>
+      <td class="trunc" title="${c.camp}">${c.camp}</td>
+      <td>${(c.sd||'').substring(0,5)}</td>
+      <td>${c.fiab}%</td>
+      <td>${procs.join(' ')}</td>
+      <td>${qtd}</td>
+      <td><span class="badge ${dbc(dir)}">${dir}</span></td>
+      <td><span class="badge b-amber">Pendente</span></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="7" class="empty">Nenhuma campanha elegível.</td></tr>';
+}
+
+function renderAnalistas(){
+  document.getElementById('tbody-aval').innerHTML=ANALISTAS_VAL.map((a,i)=>{
+    const q=quebras.filter(x=>x.analista===a.nome&&x.tipo==='val').reduce((s,x)=>s+x.qtd,0);
+    const disp=Math.max(0,a.cap-q); const pct=Math.round(disp/a.cap*100);
+    const col=avc(i);
+    return `<tr><td><div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="background:${col.bg};color:${col.c}">${ini(a.nome)}</div>${a.nome}</div></td>
+      <td>${a.cap} refs</td><td>${q?q+' refs':'—'}</td>
+      <td><div style="font-size:12px">${disp} refs</div><div class="cap-bar-wrap"><div class="cap-bar ${pct>60?'cap-ok':pct>30?'cap-warn':'cap-full'}" style="width:${pct}%"></div></div></td></tr>`;
+  }).join('');
+  document.getElementById('tbody-asub').innerHTML=ANALISTAS_SUB.map((a,i)=>{
+    const q=quebras.filter(x=>x.analista===a.nome&&x.tipo==='sub').reduce((s,x)=>s+x.qtd,0);
+    const disp=Math.max(0,a.cap-q); const pct=Math.round(disp/a.cap*100);
+    const col=avc(i);
+    return `<tr><td><div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="background:${col.bg};color:${col.c}">${ini(a.nome)}</div>${a.nome}</div></td>
+      <td>${a.cap} camp.</td><td>${q?q+' camp.':'—'}</td>
+      <td><div style="font-size:12px">${disp} camp.</div><div class="cap-bar-wrap"><div class="cap-bar ${pct>60?'cap-ok':pct>30?'cap-warn':'cap-full'}" style="width:${pct}%"></div></div></td>
+      <td><span class="badge ${dbc(a.principal)}">${a.principal}</span></td>
+      <td>${a.sec.map(s=>`<span class="badge ${dbc(s)}" style="margin-right:2px">${s}</span>`).join('')}</td></tr>`;
+  }).join('');
+}
+
+function renderDist(){
+  const aVal=ANALISTAS_VAL.map(a=>{
+    const q=quebras.filter(x=>x.analista===a.nome&&x.tipo==='val').reduce((s,x)=>s+x.qtd,0);
+    const itens=quebras.filter(x=>x.analista===a.nome&&x.tipo==='val').map(x=>({id:x.campanha,camp:x.campNome||x.campanha,sd:x.campSD||'',proc:'Imagem',qtd:x.qtd,quebra:true}));
+    return{...a,usado:q,itens};
+  });
+  const aSub=ANALISTAS_SUB.map(a=>{
+    const q=quebras.filter(x=>x.analista===a.nome&&x.tipo==='sub').reduce((s,x)=>s+x.qtd,0);
+    const itens=quebras.filter(x=>x.analista===a.nome&&x.tipo==='sub').map(x=>({id:x.campanha,camp:x.campNome||x.campanha,sd:x.campSD||'',proc:'Subida',qtd:1,quebra:true,sec:false}));
+    return{...a,usado:q,itens};
+  });
+  const sorted=[...campanhas].sort((a,b)=>{
+    const da=a.sd.split('/').slice(0,2).reverse().join('');
+    const db=b.sd.split('/').slice(0,2).reverse().join('');
+    return da.localeCompare(db)||b.fiab-a.fiab;
+  });
+  const nao=[];
+  for(const c of sorted){
+    const dir=getDir(c.cat);
+    if(c.temImg){
+      const a=aVal.find(x=>x.usado+c.qtdImg<=x.cap);
+      if(a){a.itens.push({id:c.id,camp:c.camp,sd:c.sd,proc:'Imagem',qtd:c.qtdImg,quebra:false,sec:false});a.usado+=c.qtdImg;}
+      else nao.push({nome:c.camp,proc:'Imagem',qtd:c.qtdImg+' refs',motivo:'Sem cap. Validação'});
+    }
+    if(c.temRep||c.temSub){
+      let a=aSub.find(x=>x.principal===dir&&x.usado<x.cap);
+      const sec=!a;
+      if(!a) a=aSub.find(x=>x.sec.includes(dir)&&x.usado<x.cap);
+      if(a){
+        const desc=c.libImg+c.libRep;
+        const proc=[c.temSub?'Subida':'',desc>0?'Desc':'',c.temRep?'Rep':''].filter(Boolean).join('+');
+        a.itens.push({id:c.id,camp:c.camp,sd:c.sd,proc,qtd:desc>0?desc+' itens':c.qtdRep+' rep',quebra:false,sec});
+        a.usado+=1;
+      } else nao.push({nome:c.camp,proc:'Subida',qtd:'1 camp.',motivo:dir+' sem cap.'});
+    }
+  }
+  // Enriquecer quebras com nome real das campanhas
+  const idParaCamp={};
+  for(const c of campanhas) idParaCamp[c.id]=c;
+  for(const a of [...aVal,...aSub]){
+    for(const it of a.itens){
+      if(it.quebra && idParaCamp[it.id]){
+        it.camp = idParaCamp[it.id].camp;
+        it.sd   = idParaCamp[it.id].sd;
+      }
+    }
+  }
+  dist={aVal,aSub,nao};
+
+  renderBlocos();
+}
+
+function renderBlocos() {
+  const {aVal,aSub,nao} = dist;
+
+  document.getElementById('blocks-val').innerHTML=aVal.filter(a=>a.itens.length).map((a,i)=>{
+    const pct=Math.min(100,Math.round(a.usado/a.cap*100));
+    const col=avc(i);
+    const rows=a.itens.map((it,j)=>`<tr>
+      <td style="font-size:11px;color:var(--text-sec)">${it.id||''}</td>
+      <td class="trunc" title="${it.camp}">${it.camp}</td>
+      <td style="font-size:11px;color:var(--text-sec)">${(it.sd||'').substring(0,5)}</td>
+      <td>${it.quebra?'<span class="badge b-red">Quebra</span>':'<span class="badge b-blue">Imagem</span>'}</td>
+      <td>${it.qtd} refs</td>
+      <td style="white-space:nowrap">
+        ${!it.quebra?`<button onclick="removerItem('val',${i},${j})" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface)">✕ Remover</button>`:''}
+        <button onclick="moverItem('val',${i},${j})" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface);margin-left:2px">⇄ Mover</button>
+      </td></tr>`).join('');
+    return `<div class="analyst-block">
+      <div class="analyst-header"><div class="avatar" style="background:${col.bg};color:${col.c}">${ini(a.nome)}</div>
+        <div><div class="analyst-name">${a.nome}</div><div class="analyst-sub">Validação · ${a.usado}/${a.cap} refs</div></div></div>
+      <div class="card" style="padding:10px 14px">
+        <table><thead><tr><th style="width:8%">ID</th><th style="width:32%">Campanha</th><th style="width:8%">SD</th><th style="width:18%">Processo</th><th style="width:10%">Qtd</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+        <div class="cap-bar-wrap"><div class="cap-bar ${pct>=100?'cap-full':pct>=80?'cap-warn':'cap-ok'}" style="width:${pct}%"></div></div>
+        <div style="font-size:11px;color:var(--text-sec);margin-top:4px">${pct}% utilizado</div>
+      </div></div>`;
+  }).join('')||'<div class="empty">Nenhum item para Validação.</div>';
+
+  document.getElementById('blocks-sub').innerHTML=aSub.filter(a=>a.itens.length).map((a,i)=>{
+    const pct=Math.min(100,Math.round(a.usado/a.cap*100));
+    const col=avc(i);
+    const rows=a.itens.map((it,j)=>`<tr>
+      <td style="font-size:11px;color:var(--text-sec)">${it.id||''}</td>
+      <td class="trunc" title="${it.camp}">${it.camp}</td>
+      <td style="font-size:11px;color:var(--text-sec)">${(it.sd||'').substring(0,5)}</td>
+      <td>${it.quebra?'<span class="badge b-red">Quebra</span>':`<span class="badge b-green">${it.proc}</span>`}${it.sec?'<span class="sec-tag">sec</span>':''}</td>
+      <td>${it.qtd}</td>
+      <td style="white-space:nowrap">
+        ${!it.quebra?`<button onclick="removerItem('sub',${i},${j})" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface)">✕ Remover</button>`:''}
+        <button onclick="moverItem('sub',${i},${j})" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface);margin-left:2px">⇄ Mover</button>
+      </td></tr>`).join('');
+    return `<div class="analyst-block">
+      <div class="analyst-header"><div class="avatar" style="background:${col.bg};color:${col.c}">${ini(a.nome)}</div>
+        <div><div class="analyst-name">${a.nome}</div><div class="analyst-sub"><span class="badge ${dbc(a.principal)}">${a.principal}</span> · ${a.usado}/${a.cap} camp.</div></div></div>
+      <div class="card" style="padding:10px 14px">
+        <table><thead><tr><th style="width:8%">ID</th><th style="width:30%">Campanha</th><th style="width:8%">SD</th><th style="width:24%">Processo</th><th style="width:8%">Qtd</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+        <div class="cap-bar-wrap"><div class="cap-bar ${pct>=100?'cap-full':pct>=80?'cap-warn':'cap-ok'}" style="width:${pct}%"></div></div>
+        <div style="font-size:11px;color:var(--text-sec);margin-top:4px">${pct}% utilizado</div>
+      </div></div>`;
+  }).join('')||'<div class="empty">Nenhum item para Subida.</div>';
+
+  // Não alocadas com botão de adicionar
+  document.getElementById('tbody-nao').innerHTML=nao.length
+    ?nao.map((n,i)=>`<tr>
+        <td>${n.nome}</td><td>${n.proc}</td><td>${n.qtd}</td>
+        <td style="color:var(--red)">${n.motivo}</td>
+        <td><button onclick="adicionarItem(${i})" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface)">+ Adicionar</button></td>
+      </tr>`).join('')
+    :'<tr><td colspan="5" class="empty">✅ Todas alocadas!</td></tr>';
+  
+  // Atualizar cabeçalho da tabela de não alocadas
+  document.querySelector('#tbody-nao').closest('table').querySelector('thead tr').innerHTML = '<th>Campanha</th><th>Processo</th><th>Qtd</th><th>Motivo</th><th></th>';
+}
+
+// Modal de mover/adicionar
+function removerItem(tipo, analIdx, itemIdx) {
+  const lista = tipo==='val' ? dist.aVal : dist.aSub;
+  const anal = lista[analIdx];
+  const it = anal.itens[itemIdx];
+  if(!confirm(`Remover "${it.camp}" do timing de ${anal.nome}?`)) return;
+  // Devolver capacidade
+  if(tipo==='val') anal.usado -= it.qtd;
+  else anal.usado -= 1;
+  // Mover para não alocadas
+  dist.nao.push({nome:it.camp, proc:it.proc, qtd:it.qtd, motivo:'Removido manualmente'});
+  anal.itens.splice(itemIdx,1);
+  renderBlocos();
+}
+
+function moverItem(tipo, analIdx, itemIdx) {
+  const lista = tipo==='val' ? dist.aVal : dist.aSub;
+  const anal = lista[analIdx];
+  const it = anal.itens[itemIdx];
+  if(!lista.filter((_,i)=>i!==analIdx).length) { alert('Nao ha outros analistas.'); return; }
+  const opcoes = lista.map((a,i)=> i===analIdx ? null : (i+': '+a.nome+' ('+a.usado+'/'+a.cap+')')).filter(Boolean).join('\n');
+  const input = prompt('Mover para qual analista?\n\n'+opcoes+'\n\nDigite o numero:');
+  if(input===null) return;
+  
+  const destIdx = parseInt(input);
+  if(isNaN(destIdx) || !lista[destIdx]) { alert('Opção inválida.'); return; }
+  
+  // Remover da origem
+  if(tipo==='val') { anal.usado -= it.qtd; lista[destIdx].usado += it.qtd; }
+  else { anal.usado -= 1; lista[destIdx].usado += 1; }
+  anal.itens.splice(itemIdx,1);
+  lista[destIdx].itens.push({...it, sec:false});
+  renderBlocos();
+}
+
+function adicionarItem(naoIdx) {
+  const item = dist.nao[naoIdx];
+  const isVal = item.proc.toLowerCase().includes('imagem') || item.proc.toLowerCase().includes('valida');
+  const lista = isVal ? dist.aVal : dist.aSub;
+  const opcoes = lista.map((a,i)=>(i+': '+a.nome+' ('+a.usado+'/'+a.cap+')')).join('\n');
+  const input = prompt('Adicionar para qual analista?\n\n'+opcoes+'\n\nDigite o numero:');
+  if(input===null) return;
+  
+  const destIdx = parseInt(input);
+  if(isNaN(destIdx) || !lista[destIdx]) { alert('Opção inválida.'); return; }
+  
+  lista[destIdx].itens.push({camp:item.nome, proc:item.proc, qtd:item.qtd, quebra:false, sec:false});
+  if(isVal) lista[destIdx].usado += parseNum(String(item.qtd));
+  else lista[destIdx].usado += 1;
+  dist.nao.splice(naoIdx,1);
+  renderBlocos();
+}
+
+async function aprovar(){
+  const btn=document.getElementById('btn-aprovar');
+  btn.disabled=true; btn.textContent='Exportando...';
+  document.getElementById('log').style.display='block';
+  try {
+    const rows=[];
+    const today=todayDMY();
+    if(dist){
+      for(const a of dist.aVal) for(const it of a.itens) if(!it.quebra)
+        rows.push([today,'','',it.camp,'','','Validação Imagem','Não iniciada',it.qtd,'','','']);
+      for(const a of dist.aSub) for(const it of a.itens) if(!it.quebra)
+        rows.push([today,'','',it.camp,'','',it.proc,'Não iniciada','','','','']);
+    }
+    if(!rows.length){alert('Nenhum item novo para exportar.');btn.disabled=false;btn.textContent='✓ Aprovar e exportar para Sheets';return;}
+    log(`Exportando ${rows.length} linhas...`);
+
+    // Preencher coluna AY (Data Entrega MS) nas campanhas alocadas
+    try {
+      const calMeta2=await sheetMeta(CAL_ID);
+      const calAbas2=calMeta2.sheets.map(s=>s.properties.title);
+      const calAba2=calAbas2.find(a=>a.toLowerCase().includes('planejamento'))||calAbas2[0];
+      const campAloc=new Set();
+      if(dist){
+        for(const a of dist.aVal) for(const it of a.itens) if(!it.quebra) campAloc.add(it.camp);
+        for(const a of dist.aSub) for(const it of a.itens) if(!it.quebra) campAloc.add(it.camp);
+      }
+      const campAlocList=campanhas.filter(c=>campAloc.has(c.camp));
+      const batchData=campAlocList.map(c=>({
+        range:`${calAba2}!AY${c.rowIndex+1}`,
+        values:[[today]]
+      }));
+      if(batchData.length>0){
+        const t2=await getToken();
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CAL_ID}/values:batchUpdate`,{
+          method:'POST',
+          headers:{Authorization:'Bearer '+t2,'Content-Type':'application/json'},
+          body:JSON.stringify({valueInputOption:'USER_ENTERED',data:batchData})
+        });
+        log(`Data preenchida em ${batchData.length} campanhas (col. AY)`);
+      }
+    } catch(e2){log('Aviso AY: '+e2.message);}
+
+    const timMeta=await sheetMeta(TIM_ID);
+    const timAbas=timMeta.sheets.map(s=>s.properties.title);
+    const timAba=timAbas.find(a=>a.toLowerCase().includes('timing'))||timAbas[0];
+    await sheetAppend(TIM_ID,`${timAba}!A:L`,rows);
+    log('Exportado com sucesso!');
+    document.getElementById('s2').className='step done';
+    document.getElementById('s3').className='step done';
+    document.getElementById('plotar-review').style.display='none';
+    document.getElementById('plotar-ok').style.display='block';
+  } catch(e) {
+    log('ERRO: '+e.message);
+    alert('Erro ao exportar: '+e.message);
+    btn.disabled=false;btn.textContent='✓ Aprovar e exportar para Sheets';
+  }
+}
+
+function resetAprovar(){
+  document.getElementById('s2').className='step current';
+  document.getElementById('s3').className='step';
+  document.getElementById('plotar-review').style.display='block';
+  document.getElementById('plotar-ok').style.display='none';
+  document.getElementById('btn-aprovar').disabled=false;
+  document.getElementById('btn-aprovar').textContent='✓ Aprovar e exportar para Sheets';
+}
+
+function showTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.querySelectorAll('.tab')[{visao:0,plotar:1,analistas:2,debug:3}[name]].classList.add('active');
+}
+
+function log(msg){
+  const el=document.getElementById('log');
+  el.style.display='block';
+  el.textContent+=(el.textContent?'\n':'')+msg;
+  el.scrollTop=el.scrollHeight;
+  console.log(msg);
+}
+
+async function inspecionarLinha() {
+  const linha = parseInt(document.getElementById('debug-linha').value);
+  if (!linha) { alert('Digite o número da linha'); return; }
+  const el = document.getElementById('debug-resultado');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Lendo linha ' + linha + '...</div>';
+  try {
+    const calMeta = await sheetMeta(CAL_ID);
+    const calAbas = calMeta.sheets.map(s => s.properties.title);
+    const calAba = calAbas.find(a => a.toLowerCase().includes('planejamento')) || calAbas[0];
+    const rows = await sheetGet(CAL_ID, `${calAba}!A${linha}:AZ${linha}`);
+    const row = rows[0] || [];
+    const cols = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+      'AA','AB','AC','AD','AE','AF','AG','AH','AI','AJ','AK','AL','AM','AN','AO','AP','AQ','AR','AS','AT','AU','AV','AW','AX','AY','AZ'];
+    let html = '<table><thead><tr><th>Coluna</th><th>Índice</th><th>Valor</th></tr></thead><tbody>';
+    const relevantes = ['B','C','D','F','H','AF','AH','AJ','AM','AP','AR','AS','AU','AY','AZ'];
+    for (let i = 0; i < cols.length; i++) {
+      const val = row[i] || '';
+      if (!val && !relevantes.includes(cols[i])) continue;
+      const destaque = relevantes.includes(cols[i]) ? 'background:#FDF3DC;' : '';
+      html += `<tr style="${destaque}"><td><strong>${cols[i]}</strong></td><td>${i}</td><td>${val || '<em style="color:#999">vazio</em>'}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div class="alert alert-red">Erro: ' + e.message + '</div>';
+  }
+}
+
+carregarDados();
+</script>
+</body>
+</html>
