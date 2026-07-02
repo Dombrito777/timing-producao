@@ -397,7 +397,8 @@ async function carregarDados() {
       const temRep = qtdRep>0 && plotarRep==='PLOTAR';
       const temSub = libImg>0 || libAmostra>0 || (qtdRep>0 && plotarRep==='PLOTADO');
       if(!temImg && !temRep && !temSub) {_semProcesso++; continue;}
-      campanhas.push({id,sd,camp,fiab,cat,qtdImg,qtdRep,libImg,libRep,temImg,temRep,temSub,rowIndex:r+1});
+      const analCom=gv(row,6); // coluna G
+      campanhas.push({id,sd,camp,fiab,cat,analCom,qtdImg,qtdRep,libImg,libRep,temImg,temRep,temSub,rowIndex:r+1});
     }
     log(`${campanhas.length} campanhas elegíveis | descartadas: semId=${_semId} semCamp=${_semCamp} fiabBaixa=${_fiabBaixa} jaPlotadoMS=${_plotadoCount} semProcesso=${_semProcesso}`);
 
@@ -745,56 +746,200 @@ async function aprovar(){
   btn.disabled=true; btn.textContent='Exportando...';
   document.getElementById('log').style.display='block';
   try {
-    const rows=[];
-    const today=todayDMY();
-    if(dist){
-      for(const a of dist.aVal) for(const it of a.itens) if(!it.quebra)
-        rows.push([today,'','',it.camp,'','','Validação Imagem','Não iniciada',it.qtd,'','','']);
-      for(const a of dist.aSub) for(const it of a.itens) if(!it.quebra)
-        rows.push([today,'','',it.camp,'','',it.proc,'Não iniciada','','','','']);
+    const today = todayDMY();
+    const token = await getToken();
+
+    // Buscar metadados do timing
+    const timMeta = await sheetMeta(TIM_ID);
+    const timAbas = timMeta.sheets.map(s=>s.properties.title);
+    const abaTim = timAbas.find(a=>a.toLowerCase().includes('timing'))||timAbas[0];
+    log('Exportando para aba: '+abaTim);
+
+    // Buscar coluna A do timing para encontrar linhas de hoje
+    const colA = await sheetGet(TIM_ID, `${abaTim}!A1:A3000`);
+    const hojeD = new Date().getDate();
+    const hojeM = new Date().getMonth()+1;
+
+    function isHoje(v) {
+      if(!v) return false;
+      const p = v.trim().split('/');
+      if(p.length<2) return false;
+      const p0=parseInt(p[0]), p1=parseInt(p[1]);
+      return (p0===hojeM&&p1===hojeD)||(p0===hojeD&&p1===hojeM);
     }
-    if(!rows.length){alert('Nenhum item novo para exportar.');btn.disabled=false;btn.textContent='✓ Aprovar e exportar para Sheets';return;}
-    log(`Exportando ${rows.length} linhas...`);
 
-    // Preencher coluna AY (Data Entrega MS) nas campanhas alocadas
-    try {
-      const calMeta2=await sheetMeta(CAL_ID);
-      const calAbas2=calMeta2.sheets.map(s=>s.properties.title);
-      const calAba2=calAbas2.find(a=>a.toLowerCase().includes('planejamento'))||calAbas2[0];
-      const campAloc=new Set();
+    // Encontrar linhas de hoje
+    let dataAtual='';
+    let linhasHoje=[];
+    for(let i=0;i<colA.length;i++){
+      const v=(colA[i][0]||'').trim();
+      if(v) dataAtual=v;
+      if(isHoje(dataAtual)) linhasHoje.push(i+1); // 1-indexed
+    }
+    log('Linhas de hoje: '+linhasHoje.length+' ('+linhasHoje[0]+' a '+linhasHoje[linhasHoje.length-1]+')');
+
+    if(linhasHoje.length===0){
+      alert('Não encontrei linhas de hoje no timing. Verifique se o timing de hoje já foi criado.');
+      btn.disabled=false; btn.textContent='✓ Aprovar e exportar para Sheets';
+      return;
+    }
+
+    // Ler linhas de hoje do timing completo
+    const primeiraLinha = linhasHoje[0];
+    const ultimaLinha = linhasHoje[linhasHoje.length-1];
+    const timHead = await sheetGet(TIM_ID, `${abaTim}!A1:N2`);
+    const timData = await sheetGet(TIM_ID, `${abaTim}!A${primeiraLinha}:N${ultimaLinha}`);
+
+    // Analistas e suas colunas (bloco de 12 colunas cada, começando em C=col2)
+    const ANALISTAS_TIMING = [
+      {nome:'Acsa',     startCol:2},
+      {nome:'Amanda',   startCol:14},
+      {nome:'Danilo',   startCol:26},
+      // Anna oculta: startCol:38
+      {nome:'Izabelle', startCol:50},
+      {nome:'João',     startCol:62},
+      {nome:'Jonathan', startCol:74},
+      {nome:'Lari',     startCol:86},
+      {nome:'Luana',    startCol:98},
+      {nome:'Manu',     startCol:110},
+      {nome:'Matheus',  startCol:122},
+      {nome:'Millena',  startCol:134},
+      {nome:'Roberto',  startCol:146},
+      {nome:'Thai',     startCol:158},
+      {nome:'Vitoria',  startCol:170},
+    ];
+    // Offset dentro do bloco: 0=ID,1=SD,2=Camp,3=AnalCom,4=SLA,5=Job,6=Status
+
+    function colLetter(idx) {
+      let result='';
+      let n=idx;
+      while(true){
+        result=String.fromCharCode(n%26+65)+result;
+        n=Math.floor(n/26)-1;
+        if(n<0) break;
+      }
+      return result;
+    }
+
+    // Para cada analista, preparar as linhas a escrever
+    const batchUpdates = [];
+    let totalLinhas = 0;
+
+    for(const anal of ANALISTAS_TIMING){
+      // Itens deste analista (quebras + novos)
+      const isVal = ANALISTAS_VAL.some(a=>a.nome===anal.nome);
+      const isSub = ANALISTAS_SUB.some(a=>a.nome===anal.nome);
+      
+      let itensAnal = [];
+      
       if(dist){
-        for(const a of dist.aVal) for(const it of a.itens) if(!it.quebra) campAloc.add(it.camp);
-        for(const a of dist.aSub) for(const it of a.itens) if(!it.quebra) campAloc.add(it.camp);
+        if(isVal){
+          const aVal = dist.aVal.find(a=>a.nome===anal.nome);
+          if(aVal) itensAnal = aVal.itens;
+        }
+        if(isSub){
+          const aSub = dist.aSub.find(a=>a.nome===anal.nome);
+          if(aSub) itensAnal = aSub.itens;
+        }
       }
-      const campAlocList=campanhas.filter(c=>campAloc.has(c.camp));
-      const batchData=campAlocList.map(c=>({
-        range:`${calAba2}!AY${c.rowIndex+1}`,
-        values:[[today]]
-      }));
-      if(batchData.length>0){
-        const t2=await getToken();
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CAL_ID}/values:batchUpdate`,{
-          method:'POST',
-          headers:{Authorization:'Bearer '+t2,'Content-Type':'application/json'},
-          body:JSON.stringify({valueInputOption:'USER_ENTERED',data:batchData})
-        });
-        log(`Data preenchida em ${batchData.length} campanhas (col. AY)`);
-      }
-    } catch(e2){log('Aviso AY: '+e2.message);}
 
-    const timMeta=await sheetMeta(TIM_ID);
-    const timAbas=timMeta.sheets.map(s=>s.properties.title);
-    const timAba=timAbas.find(a=>a.toLowerCase().includes('timing'))||timAbas[0];
-    await sheetAppend(TIM_ID,`${timAba}!A:L`,rows);
-    log('Exportado com sucesso!');
+      if(!itensAnal.length) continue;
+
+      // Encontrar linhas vazias de hoje para este analista
+      const idColOffset = 0; // ID é a primeira coluna do bloco
+      const idColAbs = anal.startCol; // índice absoluto da coluna ID
+
+      // Linhas vazias = linhas de hoje onde a coluna ID deste analista está vazia
+      let linhasVazias = [];
+      for(let i=0;i<timData.length;i++){
+        const row = timData[i] || [];
+        // Preencher row até tamanho necessário
+        while(row.length <= idColAbs - anal.startCol + 6) row.push('');
+        const idVal = (row[idColAbs - anal.startCol]||'').trim();
+        if(!idVal) linhasVazias.push(primeiraLinha + i);
+      }
+
+      // Preparar valores para escrever
+      // Expandir campanhas de subida em múltiplas linhas
+      let linhasParaEscrever = [];
+      for(const it of itensAnal){
+        if(it.quebra){
+          // Quebra: manter como estava, só atualizar status para o original
+          linhasParaEscrever.push({
+            id: it.id, sd: it.sd, camp: it.camp,
+            analCom: it.analCom||'', sla: '',
+            job: it.proc, status: it.status||'Em andamento'
+          });
+        } else if(isSub){
+          // Subida: expandir em múltiplas linhas
+          const campData = campanhas.find(c=>c.camp===it.camp);
+          const analCom = campData ? (campData.analCom||'') : '';
+          if(it.temRep||it.proc.includes('Rep')){
+            linhasParaEscrever.push({id:it.id,sd:it.sd,camp:it.camp,analCom,sla:'',job:'Clone Repeteco',status:'Não iniciada'});
+          }
+          if(it.temDesc||it.proc.includes('Desc')){
+            linhasParaEscrever.push({id:it.id,sd:it.sd,camp:it.camp,analCom,sla:'',job:'ShopNext',status:'Não iniciada'});
+          }
+          linhasParaEscrever.push({id:it.id,sd:it.sd,camp:it.camp,analCom,sla:'',job:'Subida MS',status:'Não iniciada'});
+        } else {
+          // Validação
+          const campData = campanhas.find(c=>c.camp===it.camp);
+          const analCom = campData ? (campData.analCom||'') : '';
+          linhasParaEscrever.push({id:it.id,sd:it.sd,camp:it.camp,analCom,sla:'',job:'Validação',status:'Não iniciada'});
+        }
+      }
+
+      // Escrever nas linhas vazias
+      for(let i=0;i<linhasParaEscrever.length;i++){
+        if(i>=linhasVazias.length){
+          log('AVISO: '+anal.nome+' sem linhas vazias suficientes! Faltam '+(linhasParaEscrever.length-i)+' linhas.');
+          break;
+        }
+        const linha = linhasVazias[i];
+        const item = linhasParaEscrever[i];
+        // Colunas absolutas: startCol+0=ID, +1=SD, +2=Camp, +3=AnalCom, +4=SLA, +5=Job, +6=Status
+        const colID  = colLetter(anal.startCol);
+        const colStat = colLetter(anal.startCol+6);
+        const range = `${abaTim}!${colID}${linha}:${colStat}${linha}`;
+        batchUpdates.push({
+          range,
+          values:[[item.id, item.sd, item.camp, item.analCom, item.sla, item.job, item.status]]
+        });
+        totalLinhas++;
+      }
+    }
+
+    log('Preparadas '+totalLinhas+' linhas para exportar');
+
+    if(batchUpdates.length===0){
+      alert('Nenhum item para exportar.');
+      btn.disabled=false; btn.textContent='✓ Aprovar e exportar para Sheets';
+      return;
+    }
+
+    // Enviar batch update
+    const res = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${TIM_ID}/values:batchUpdate`,
+      {
+        method:'POST',
+        headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+        body:JSON.stringify({valueInputOption:'USER_ENTERED', data:batchUpdates})
+      }
+    );
+    const resData = await res.json();
+    if(resData.error) throw new Error(resData.error.message);
+
+    log('Exportado com sucesso! '+totalLinhas+' linhas escritas.');
     document.getElementById('s2').className='step done';
     document.getElementById('s3').className='step done';
     document.getElementById('plotar-review').style.display='none';
     document.getElementById('plotar-ok').style.display='block';
-  } catch(e) {
+
+  } catch(e){
     log('ERRO: '+e.message);
     alert('Erro ao exportar: '+e.message);
-    btn.disabled=false;btn.textContent='✓ Aprovar e exportar para Sheets';
+    btn.disabled=false;
+    btn.textContent='✓ Aprovar e exportar para Sheets';
   }
 }
 
