@@ -605,7 +605,7 @@ function renderDist(){
       if(a){
         const desc=c.libImg+c.libRep;
         const proc=[c.temSub?'Subida':'',desc>0?'Desc':'',c.temRep?'Rep':''].filter(Boolean).join('+');
-        a.itens.push({id:c.id,camp:c.camp,sd:c.sd,proc,qtd:desc>0?desc+' itens':c.qtdRep+' rep',quebra:false,sec});
+        a.itens.push({id:c.id,camp:c.camp,sd:c.sd,proc,qtd:desc>0?desc+' itens':c.qtdRep+' rep',quebra:false,sec,temRep:c.temRep,temDesc:desc>0});
         a.usado+=1;
       } else nao.push({nome:c.camp,proc:'Subida',qtd:'1 camp.',motivo:dir+' sem cap.'});
     }
