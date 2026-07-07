@@ -666,9 +666,9 @@ function renderBlocos() {
         jobs.push('Subida MS');
       }
       return jobs.map((job,k)=>`<tr>
-        <td style="font-size:11px;color:var(--text-sec)">${k===0?(it.id||''):''}</td>
+        <td style="font-size:11px;color:var(--text-sec)">${it.id||''}</td>
         <td class="trunc" title="${it.camp}">${k===0?it.camp:''}</td>
-        <td style="font-size:11px;color:var(--text-sec)">${k===0?(it.sd||'').substring(0,5):''}</td>
+        <td style="font-size:11px;color:var(--text-sec)">${(it.sd||'').substring(0,5)}</td>
         <td>${it.quebra?'<span class="badge b-red">Quebra</span>':`<span class="badge b-green">${job}</span>`}${it.sec&&k===0?'<span class="sec-tag">sec</span>':''}</td>
         <td>${k===0?it.qtd:''}</td>
         <td style="white-space:nowrap">${k===0?`
