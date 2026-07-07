@@ -655,16 +655,27 @@ function renderBlocos() {
   document.getElementById('blocks-sub').innerHTML=aSub.filter(a=>a.itens.length).map((a,i)=>{
     const pct=Math.min(100,Math.round(a.usado/a.cap*100));
     const col=avc(i);
-    const rows=a.itens.map((it,j)=>`<tr>
-      <td style="font-size:11px;color:var(--text-sec)">${it.id||''}</td>
-      <td class="trunc" title="${it.camp}">${it.camp}</td>
-      <td style="font-size:11px;color:var(--text-sec)">${(it.sd||'').substring(0,5)}</td>
-      <td>${it.quebra?'<span class="badge b-red">Quebra</span>':`<span class="badge b-green">${it.proc}</span>`}${it.sec?'<span class="sec-tag">sec</span>':''}</td>
-      <td>${it.qtd}</td>
-      <td style="white-space:nowrap">
-        ${!it.quebra?`<button onclick="removerItem('sub',${i},${j})" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface)">✕ Remover</button>`:''}
-        <button onclick="moverItem('sub',${i},${j})" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface);margin-left:2px">⇄ Mover</button>
-      </td></tr>`).join('');
+    const rows=a.itens.flatMap((it,j)=>{
+      // Expandir em linhas de job separadas
+      const jobs=[];
+      if(it.quebra){
+        jobs.push(it.proc||'Subida');
+      } else {
+        if(it.temRep||it.proc.includes('Rep')) jobs.push('Clone Repeteco');
+        if(it.temDesc||it.proc.includes('Desc')) jobs.push('ShopNext');
+        jobs.push('Subida MS');
+      }
+      return jobs.map((job,k)=>`<tr>
+        <td style="font-size:11px;color:var(--text-sec)">${k===0?(it.id||''):''}</td>
+        <td class="trunc" title="${it.camp}">${k===0?it.camp:''}</td>
+        <td style="font-size:11px;color:var(--text-sec)">${k===0?(it.sd||'').substring(0,5):''}</td>
+        <td>${it.quebra?'<span class="badge b-red">Quebra</span>':`<span class="badge b-green">${job}</span>`}${it.sec&&k===0?'<span class="sec-tag">sec</span>':''}</td>
+        <td>${k===0?it.qtd:''}</td>
+        <td style="white-space:nowrap">${k===0?`
+          ${!it.quebra?`<button onclick="removerItem('sub',${i},${j})" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface)">✕ Remover</button>`:''}
+          <button onclick="moverItem('sub',${i},${j})" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface);margin-left:2px">⇄ Mover</button>`:''}
+        </td></tr>`);
+    }).join('');
     return `<div class="analyst-block">
       <div class="analyst-header"><div class="avatar" style="background:${col.bg};color:${col.c}">${ini(a.nome)}</div>
         <div><div class="analyst-name">${a.nome}</div><div class="analyst-sub"><span class="badge ${dbc(a.principal)}">${a.principal}</span> · ${a.usado}/${a.cap} camp.</div></div></div>
