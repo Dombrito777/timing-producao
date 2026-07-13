@@ -783,13 +783,13 @@ function adicionarItem(naoIdx) {
 }
 
 function initDataReferencia() {
-  // Preencher campo com último dia útil
+  const campo = document.getElementById('data-referencia');
+  if(!campo || campo.value) return; // não sobrescrever se já tiver valor
   const d = new Date();
   d.setDate(d.getDate()-1);
   while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()-1);
   const str = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  const campo = document.getElementById('data-referencia');
-  if(campo) campo.value = str;
+  campo.value = str;
 }
 
 function getDataReferencia() {
