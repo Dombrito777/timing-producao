@@ -111,7 +111,11 @@
       <div class="step" id="s3">3. Aprovar</div>
     </div>
     <div id="plotar-review">
-      <div class="alert alert-warn">⚠️ Quebras do dia anterior já descontadas da capacidade de cada analista.</div>
+      <div class="alert alert-warn" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span>⚠️ Quebras do dia anterior já descontadas da capacidade. Data de referência:</span>
+        <input type="date" id="data-referencia" style="padding:5px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);">
+        <button class="btn btn-secondary" onclick="recarregarComData()" style="padding:6px 14px;font-size:13px;">↺ Recalcular</button>
+      </div>
       <div class="card-title">Validação — Imagem</div>
       <div id="blocks-val"></div>
       <div class="card-title" style="margin-top:20px">Subida + Desc + Repeteco</div>
@@ -428,10 +432,21 @@ async function carregarDados() {
       const totalLinhas = colA.length;
       
       // Calcular ontem
-      const _ontemDate = new Date(); _ontemDate.setDate(_ontemDate.getDate()-1);
-      const _ontemDia = _ontemDate.getDate();
-      const _ontemMes = _ontemDate.getMonth()+1;
-      log('Procurando data ontem: '+_ontemDia+'/'+_ontemMes);
+      // Usar data de referência do campo ou calcular último dia útil
+      let _ontemDia, _ontemMes;
+      const _dataRef = getDataReferencia ? getDataReferencia() : null;
+      if(_dataRef) {
+        _ontemDia = _dataRef.dia;
+        _ontemMes = _dataRef.mes;
+        log('Usando data de referência: '+_ontemDia+'/'+_ontemMes);
+      } else {
+        const _ontemDate = new Date();
+        _ontemDate.setDate(_ontemDate.getDate()-1);
+        while(_ontemDate.getDay()===0||_ontemDate.getDay()===6) _ontemDate.setDate(_ontemDate.getDate()-1);
+        _ontemDia = _ontemDate.getDate();
+        _ontemMes = _ontemDate.getMonth()+1;
+        log('Último dia útil calculado: '+_ontemDia+'/'+_ontemMes);
+      }
       
       // Encontrar todas as linhas de ontem
       let _dataAtualA = '';
@@ -466,6 +481,7 @@ async function carregarDados() {
       quebras=[];
     }
 
+    initDataReferencia();
     renderVisao();
     renderAnalistas();
     renderDist();
@@ -766,6 +782,27 @@ function adicionarItem(naoIdx) {
   renderBlocos();
 }
 
+function initDataReferencia() {
+  // Preencher campo com último dia útil
+  const d = new Date();
+  d.setDate(d.getDate()-1);
+  while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()-1);
+  const str = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const campo = document.getElementById('data-referencia');
+  if(campo) campo.value = str;
+}
+
+function getDataReferencia() {
+  const campo = document.getElementById('data-referencia');
+  if(!campo||!campo.value) return null;
+  const [ano,mes,dia] = campo.value.split('-').map(Number);
+  return {dia, mes};
+}
+
+async function recarregarComData() {
+  await carregarDados();
+}
+
 async function aprovar(){
   const btn=document.getElementById('btn-aprovar');
   btn.disabled=true; btn.textContent='Exportando...';
@@ -790,7 +827,11 @@ async function aprovar(){
       const p = v.trim().split('/');
       if(p.length<2) return false;
       const p0=parseInt(p[0]), p1=parseInt(p[1]);
-      return (p0===hojeM&&p1===hojeD)||(p0===hojeD&&p1===hojeM);
+      // Formato americano M/DD/AAAA: p0=mês, p1=dia
+      if(p0===hojeM && p1===hojeD) return true;
+      // Formato brasileiro DD/MM/AAAA: p0=dia, p1=mês
+      if(p0===hojeD && p1===hojeM) return true;
+      return false;
     }
 
     // Encontrar linhas de hoje
