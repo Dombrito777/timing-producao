@@ -391,11 +391,25 @@ async function carregarDados() {
       const qtdRep=parseNum(gv(row,43));   // AR
       const plotarRep=gv(row,44).toUpperCase(); // AS
       const libRep=parseNum(gv(row,46));   // AU
+      // AN = índice 39 (Bate - status do processo de validação)
+      const statusValidacao=gv(row,39).toLowerCase(); // AN
       // AD = índice 29 (Liberado Produção Amostra)
       const libAmostra=parseNum(gv(row,29));
+
       const temImg = qtdImg>0 && !!link && statusImg==='OK' && plotarImg==='PLOTAR';
       const temRep = qtdRep>0 && plotarRep==='PLOTAR';
-      const temSub = libImg>0 || libAmostra>0 || (qtdRep>0 && plotarRep==='PLOTADO');
+
+      // Lógica de Subida:
+      // 1. Repeteco pronto (AS = PLOTAR ou PLOTADO)
+      const repProntoParaMS = qtdRep>0 && (plotarRep==='PLOTAR'||plotarRep==='PLOTADO');
+      // 2. Validação de imagem finalizada (AN = "ok")
+      const validacaoOk = statusValidacao==='ok';
+      // 3. Só amostra finalizada (AD > 0 e AN vazia)
+      const apenasAmostra = libAmostra>0 && !statusValidacao;
+      // AN com status de pendência = não pode subir
+      const validacaoPendente = statusValidacao && statusValidacao!=='ok';
+
+      const temSub = (repProntoParaMS || validacaoOk || apenasAmostra) && !validacaoPendente;
       if(!temImg && !temRep && !temSub) {_semProcesso++; continue;}
       const analCom=gv(row,6); // coluna G
       campanhas.push({id,sd,camp,fiab,cat,analCom,qtdImg,qtdRep,libImg,libRep,temImg,temRep,temSub,rowIndex:r+1});
