@@ -635,7 +635,7 @@ function renderDist(){
       if(a){
         const desc=c.libImg+c.libRep;
         const proc=[c.temSub?'Subida':'',desc>0?'Desc':'',c.temRep?'Rep':''].filter(Boolean).join('+');
-        a.itens.push({id:c.id,camp:c.camp,sd:c.sd,proc,qtd:desc>0?desc+' itens':c.qtdRep+' rep',quebra:false,sec,temRep:c.temRep,temDesc:desc>0,libImg:c.libImg,libAmostra:c.libAmostra||0});
+        a.itens.push({id:c.id,camp:c.camp,sd:c.sd,proc,qtd:desc>0?desc+' itens':c.qtdRep+' rep',quebra:false,sec,temRep:c.temRep,temDesc:desc>0,libImg:c.libImg,libAmostra:c.libAmostra||0,qtdRep:c.qtdRep});
         a.usado+=1;
       } else nao.push({nome:c.camp,proc:'Subida',qtd:'1 camp.',motivo:dir+' sem cap.'});
     }
@@ -695,16 +695,23 @@ function renderBlocos() {
         if((it.libImg>0||it.libAmostra>0)||(it.temDesc||it.proc.includes('Desc'))) jobs.push('ShopNext');
         jobs.push('Subida MS');
       }
-      return jobs.map((job,k)=>`<tr>
+      return jobs.map((job,k)=>{
+        let qtdExibir='';
+        if(k===0&&it.quebra) qtdExibir=it.qtd;
+        else if(job==='Clone Repeteco') qtdExibir=it.qtdRep||it.qtd||'';
+        else if(job==='ShopNext') qtdExibir=(it.libImg||0)+(it.libAmostra||0)||'';
+        else if(job==='Subida MS') qtdExibir='';
+        else qtdExibir=it.qtd||'';
+        return `<tr>
         <td style="font-size:11px;color:var(--text-sec)">${it.id||''}</td>
         <td class="trunc" title="${it.camp}">${it.camp}</td>
         <td style="font-size:11px;color:var(--text-sec)">${(it.sd||'').substring(0,5)}</td>
         <td>${it.quebra?'<span class="badge b-red">Quebra</span>':`<span class="badge b-green">${job}</span>`}${it.sec&&k===0?'<span class="sec-tag">sec</span>':''}</td>
-        <td>${k===0?it.qtd:''}</td>
+        <td>${qtdExibir}</td>
         <td style="white-space:nowrap">${k===0?`
           ${!it.quebra?`<button onclick="removerItem('sub',${i},${j})" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface)">✕ Remover</button>`:''}
           <button onclick="moverItem('sub',${i},${j})" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface);margin-left:2px">⇄ Mover</button>`:''}
-        </td></tr>`);
+        </td></tr>`;}).join('');
     }).join('');
     return `<div class="analyst-block">
       <div class="analyst-header"><div class="avatar" style="background:${col.bg};color:${col.c}">${ini(a.nome)}</div>
