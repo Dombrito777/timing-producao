@@ -700,7 +700,7 @@ function renderBlocos() {
         let qtdExibir='';
         if(k===0&&it.quebra) qtdExibir=it.qtd;
         else if(job==='Clone Repeteco') qtdExibir=it.qtdRep||it.qtd||'';
-        else if(job==='ShopNext') { const _q=(parseInt(it.libImg)||0)+(parseInt(it.libAmostra)||0); qtdExibir=_q>0?_q:''; }
+        else if(job==='ShopNext') { const _li=parseInt(it.libImg)||0; const _la=parseInt(it.libAmostra)||0; const _q=_li+_la; qtdExibir=_q>0?String(_q):String(it.libImg||'')+'|'+String(it.libAmostra||''); }
         else if(job==='Subida MS') qtdExibir='';
         else qtdExibir=it.qtd||'';
         return `<tr>
