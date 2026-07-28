@@ -416,7 +416,7 @@ async function carregarDados() {
       const temSub = (repProntoParaMS || validacaoOk || apenasAmostra) && !validacaoPendente;
       if(!temImg && !temRep && !temSub) {_semProcesso++; continue;}
       const analCom=gv(row,6); // coluna G
-      campanhas.push({id,sd,camp,fiab,cat,analCom,qtdImg,qtdRep,libImg,libRep,temImg,temRep,temSub,rowIndex:r+1});
+      campanhas.push({id,sd,camp,fiab,cat,analCom,qtdImg,qtdRep,libImg,libRep,libAmostra,temImg,temRep,temSub,rowIndex:r+1});
     }
     log(`${campanhas.length} campanhas elegíveis | descartadas: semId=${_semId} semCamp=${_semCamp} fiabBaixa=${_fiabBaixa} jaPlotadoMS=${_plotadoCount} semProcesso=${_semProcesso}`);
 
@@ -811,38 +811,46 @@ async function aprovar(){
     const today = todayDMY();
     const token = await getToken();
 
-    // Buscar metadados do timing
     const timMeta = await sheetMeta(TIM_ID);
     const timAbas = timMeta.sheets.map(s=>s.properties.title);
-    const abaTim = timAbas.find(a=>a.toLowerCase().includes('timing'))||timAbas[0];
+    const abaTim = 'Teste Timming'; // MODO TESTE - mudar para timing real depois
     log('Exportando para aba: '+abaTim);
 
-    // Buscar coluna A do timing para encontrar linhas de hoje
+    // Buscar coluna A do timing para encontrar linhas de hoje e de ontem
     const colA = await sheetGet(TIM_ID, `${abaTim}!A1:A3000`);
     const hojeD = new Date().getDate();
     const hojeM = new Date().getMonth()+1;
 
-    function isHoje(v) {
+    // Data de referência (ontem/último dia útil)
+    const dataRef = getDataReferencia();
+    const ontemD = dataRef ? dataRef.dia : hojeD;
+    const ontemM = dataRef ? dataRef.mes : hojeM;
+
+    function isHojeLocal(v) {
       if(!v) return false;
       const p = v.trim().split('/');
       if(p.length<2) return false;
       const p0=parseInt(p[0]), p1=parseInt(p[1]);
-      // Formato americano M/DD/AAAA: p0=mês, p1=dia
-      if(p0===hojeM && p1===hojeD) return true;
-      // Formato brasileiro DD/MM/AAAA: p0=dia, p1=mês
-      if(p0===hojeD && p1===hojeM) return true;
-      return false;
+      return (p0===hojeM&&p1===hojeD)||(p0===hojeD&&p1===hojeM);
+    }
+    function isOntemLocal(v) {
+      if(!v) return false;
+      const p = v.trim().split('/');
+      if(p.length<2) return false;
+      const p0=parseInt(p[0]), p1=parseInt(p[1]);
+      return (p0===ontemM&&p1===ontemD)||(p0===ontemD&&p1===ontemM);
     }
 
-    // Encontrar linhas de hoje
-    let dataAtual='';
-    let linhasHoje=[];
+    // Encontrar linhas de hoje e de ontem
+    let dataAtualA='';
+    let linhasHoje=[], linhasOntem=[];
     for(let i=0;i<colA.length;i++){
       const v=(colA[i][0]||'').trim();
-      if(v) dataAtual=v;
-      if(isHoje(dataAtual)) linhasHoje.push(i+1); // 1-indexed
+      if(v) dataAtualA=v;
+      if(isHojeLocal(dataAtualA)) linhasHoje.push(i+1);
+      if(isOntemLocal(dataAtualA)) linhasOntem.push(i+1);
     }
-    log('Linhas de hoje: '+linhasHoje.length+' ('+linhasHoje[0]+' a '+linhasHoje[linhasHoje.length-1]+')');
+    log('Linhas de hoje: '+linhasHoje.length+' | Linhas de ontem: '+linhasOntem.length);
 
     if(linhasHoje.length===0){
       alert('Não encontrei linhas de hoje no timing. Verifique se o timing de hoje já foi criado.');
@@ -850,18 +858,23 @@ async function aprovar(){
       return;
     }
 
-    // Ler linhas de hoje do timing completo
-    const primeiraLinha = linhasHoje[0];
-    const ultimaLinha = linhasHoje[linhasHoje.length-1];
-    const timHead = await sheetGet(TIM_ID, `${abaTim}!A1:N2`);
-    const timData = await sheetGet(TIM_ID, `${abaTim}!A${primeiraLinha}:N${ultimaLinha}`);
+    // Ler linhas de hoje e ontem
+    const primeiraHoje = linhasHoje[0];
+    const ultimaHoje = linhasHoje[linhasHoje.length-1];
+    const timHoje = await sheetGet(TIM_ID, `${abaTim}!A${primeiraHoje}:N${ultimaHoje}`);
 
-    // Analistas e suas colunas (bloco de 12 colunas cada, começando em C=col2)
+    let timOntem = [];
+    if(linhasOntem.length>0){
+      const primeiraOntem = linhasOntem[0];
+      const ultimaOntem = linhasOntem[linhasOntem.length-1];
+      timOntem = await sheetGet(TIM_ID, `${abaTim}!A${primeiraOntem}:N${ultimaOntem}`);
+    }
+
+    // Analistas e colunas
     const ANALISTAS_TIMING = [
       {nome:'Acsa',     startCol:2},
       {nome:'Amanda',   startCol:14},
       {nome:'Danilo',   startCol:26},
-      // Anna oculta: startCol:38
       {nome:'Izabelle', startCol:50},
       {nome:'João',     startCol:62},
       {nome:'Jonathan', startCol:74},
@@ -874,103 +887,107 @@ async function aprovar(){
       {nome:'Thai',     startCol:158},
       {nome:'Vitoria',  startCol:170},
     ];
-    // Offset dentro do bloco: 0=ID,1=SD,2=Camp,3=AnalCom,4=SLA,5=Job,6=Status
+
+    const STATUS_QUEBRA_SET = new Set([
+      'em andamento','excel nok - imagem nok','excel nok - imagem ok',
+      'excel ok - imagem nok','falta p.o','falta po',
+      'não iniciada','nao iniciada','inviável','inviavel','quebra'
+    ]);
 
     function colLetter(idx) {
-      let result='';
-      let n=idx;
-      while(true){
-        result=String.fromCharCode(n%26+65)+result;
-        n=Math.floor(n/26)-1;
-        if(n<0) break;
-      }
+      let result='', n=idx;
+      while(true){ result=String.fromCharCode(n%26+65)+result; n=Math.floor(n/26)-1; if(n<0) break; }
       return result;
     }
 
-    // Para cada analista, preparar as linhas a escrever
     const batchUpdates = [];
     let totalLinhas = 0;
 
     for(const anal of ANALISTAS_TIMING){
-      // Itens deste analista (quebras + novos)
+      const sc = anal.startCol;
+      // Offset: 0=ID,1=SD,2=Camp,3=AnalCom,4=SLA,5=Job,6=Status,7=Prog,8=Real,9=Pend
+
+      // 1. Encontrar quebras de ontem para este analista
+      const quebrasAnalista = [];
+      for(let i=0;i<timOntem.length;i++){
+        const row = timOntem[i]||[];
+        const id = (row[sc]||'').trim(); if(!id) continue;
+        const status = (row[sc+6]||'').trim().toLowerCase();
+        if(STATUS_QUEBRA_SET.has(status)){
+          quebrasAnalista.push({
+            id: row[sc]||'', sd: row[sc+1]||'', camp: row[sc+2]||'',
+            analCom: row[sc+3]||'', sla: row[sc+4]||'', job: row[sc+5]||'',
+            status: row[sc+6]||'', prog: row[sc+7]||'', real: row[sc+8]||'',
+            pend: row[sc+9]||''
+          });
+        }
+      }
+
+      // 2. Itens novos deste analista
       const isVal = ANALISTAS_VAL.some(a=>a.nome===anal.nome);
       const isSub = ANALISTAS_SUB.some(a=>a.nome===anal.nome);
-      
-      let itensAnal = [];
-      
+      let itensNovos = [];
       if(dist){
-        if(isVal){
-          const aVal = dist.aVal.find(a=>a.nome===anal.nome);
-          if(aVal) itensAnal = aVal.itens;
-        }
-        if(isSub){
-          const aSub = dist.aSub.find(a=>a.nome===anal.nome);
-          if(aSub) itensAnal = aSub.itens;
-        }
+        if(isVal){ const aV=dist.aVal.find(a=>a.nome===anal.nome); if(aV) itensNovos=aV.itens.filter(i=>!i.quebra); }
+        if(isSub){ const aS=dist.aSub.find(a=>a.nome===anal.nome); if(aS) itensNovos=aS.itens.filter(i=>!i.quebra); }
       }
 
-      if(!itensAnal.length) continue;
-
-      // Encontrar linhas vazias de hoje para este analista
-      const idColOffset = 0; // ID é a primeira coluna do bloco
-      const idColAbs = anal.startCol; // índice absoluto da coluna ID
-
-      // Linhas vazias = linhas de hoje onde a coluna ID deste analista está vazia
-      let linhasVazias = [];
-      for(let i=0;i<timData.length;i++){
-        const row = timData[i] || [];
-        // Preencher row até tamanho necessário
-        while(row.length <= idColAbs - anal.startCol + 6) row.push('');
-        const idVal = (row[idColAbs - anal.startCol]||'').trim();
-        if(!idVal) linhasVazias.push(primeiraLinha + i);
-      }
-
-      // Preparar valores para escrever
-      // Expandir campanhas de subida em múltiplas linhas
+      // 3. Expandir itens novos em linhas
       let linhasParaEscrever = [];
-      for(const it of itensAnal){
-        if(it.quebra){
-          // Quebra: manter como estava, só atualizar status para o original
-          linhasParaEscrever.push({
-            id: it.id, sd: it.sd, camp: it.camp,
-            analCom: it.analCom||'', sla: '',
-            job: it.proc, status: it.status||'Em andamento'
-          });
-        } else if(isSub){
-          // Subida: expandir em múltiplas linhas
-          const campData = campanhas.find(c=>c.camp===it.camp);
-          const analCom = campData ? (campData.analCom||'') : '';
-          if(it.temRep||it.proc.includes('Rep')){
-            linhasParaEscrever.push({id:it.id,sd:it.sd,camp:it.camp,analCom,sla:'',job:'Clone Repeteco',status:'Não iniciada'});
-          }
-          if(it.temDesc||it.proc.includes('Desc')){
-            linhasParaEscrever.push({id:it.id,sd:it.sd,camp:it.camp,analCom,sla:'',job:'ShopNext',status:'Não iniciada'});
-          }
-          linhasParaEscrever.push({id:it.id,sd:it.sd,camp:it.camp,analCom,sla:'',job:'Subida MS',status:'Não iniciada'});
+
+      // Primeiro as quebras - só ID, Job, Status, Prog (fórmulas puxam o resto)
+      for(const q of quebrasAnalista){
+        linhasParaEscrever.push({id:q.id, job:q.job, status:q.status, prog:q.prog});
+      }
+
+      // Depois os novos - ID, Job, Status e Prog calculado
+      for(const it of itensNovos){
+        const campData = campanhas.find(c=>c.id===it.id);
+        const qtdImg = campData ? campData.qtdImg : 0;
+        const qtdRep = campData ? campData.qtdRep : 0;
+        const libImg = campData ? campData.libImg : 0;
+        const libAmostra = campData ? parseNum(String(campData.libAmostra||0)) : 0;
+        if(isSub){
+          if(it.temRep||it.proc.includes('Rep'))
+            linhasParaEscrever.push({id:it.id, job:'Clone Repeteco', status:'Não iniciada', prog:qtdRep||''});
+          if(it.temDesc||it.proc.includes('Desc'))
+            linhasParaEscrever.push({id:it.id, job:'ShopNext', status:'Não iniciada', prog:(libImg+libAmostra)||''});
+          linhasParaEscrever.push({id:it.id, job:'Subida MS', status:'Não iniciada', prog:''});
         } else {
-          // Validação
-          const campData = campanhas.find(c=>c.camp===it.camp);
-          const analCom = campData ? (campData.analCom||'') : '';
-          linhasParaEscrever.push({id:it.id,sd:it.sd,camp:it.camp,analCom,sla:'',job:'Validação',status:'Não iniciada'});
+          linhasParaEscrever.push({id:it.id, job:'Validação', status:'Não iniciada', prog:qtdImg||''});
         }
       }
 
-      // Escrever nas linhas vazias
+      if(!linhasParaEscrever.length) continue;
+
+      // 4. Encontrar linhas vazias de hoje para este analista
+      const linhasVazias = [];
+      for(let i=0;i<timHoje.length;i++){
+        const row = timHoje[i]||[];
+        const idVal = (row[sc]||'').trim();
+        if(!idVal) linhasVazias.push(primeiraHoje + i);
+      }
+
+      if(linhasVazias.length < linhasParaEscrever.length){
+        log('AVISO: '+anal.nome+' tem apenas '+linhasVazias.length+' linhas vazias para '+linhasParaEscrever.length+' itens!');
+      }
+
+      // 5. Montar batch updates
+      // Colunas: sc=ID, sc+5=Job, sc+6=Status, sc+7=Prog
+      const colID   = colLetter(sc);
+      const colJob  = colLetter(sc+5);
+      const colStat = colLetter(sc+6);
+      const colProg = colLetter(sc+7);
       for(let i=0;i<linhasParaEscrever.length;i++){
-        if(i>=linhasVazias.length){
-          log('AVISO: '+anal.nome+' sem linhas vazias suficientes! Faltam '+(linhasParaEscrever.length-i)+' linhas.');
-          break;
-        }
+        if(i>=linhasVazias.length) break;
         const linha = linhasVazias[i];
         const item = linhasParaEscrever[i];
-        // Colunas absolutas: startCol+0=ID, +1=SD, +2=Camp, +3=AnalCom, +4=SLA, +5=Job, +6=Status
-        const colID  = colLetter(anal.startCol);
-        const colStat = colLetter(anal.startCol+6);
-        const range = `${abaTim}!${colID}${linha}:${colStat}${linha}`;
-        batchUpdates.push({
-          range,
-          values:[[item.id, item.sd, item.camp, item.analCom, item.sla, item.job, item.status]]
-        });
+        // Escrever ID
+        batchUpdates.push({range:`${abaTim}!${colID}${linha}`,values:[[item.id]]});
+        // Escrever Job e Status juntos
+        batchUpdates.push({range:`${abaTim}!${colJob}${linha}:${colStat}${linha}`,values:[[item.job, item.status]]});
+        // Escrever Prog se tiver
+        if(item.prog!==undefined && item.prog!=='') batchUpdates.push({range:`${abaTim}!${colProg}${linha}`,values:[[item.prog]]});
         totalLinhas++;
       }
     }
@@ -986,14 +1003,34 @@ async function aprovar(){
     // Enviar batch update
     const res = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${TIM_ID}/values:batchUpdate`,
-      {
-        method:'POST',
-        headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
-        body:JSON.stringify({valueInputOption:'USER_ENTERED', data:batchUpdates})
-      }
+      { method:'POST', headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+        body:JSON.stringify({valueInputOption:'USER_ENTERED', data:batchUpdates}) }
     );
     const resData = await res.json();
     if(resData.error) throw new Error(resData.error.message);
+
+    // Preencher coluna AY do calendário com data de hoje
+    try {
+      const calMeta = await sheetMeta(CAL_ID);
+      const calAbas = calMeta.sheets.map(s=>s.properties.title);
+      const calAba = calAbas.find(a=>a.toLowerCase().includes('planejamento'))||calAbas[0];
+      const campAlocadas = [];
+      if(dist){
+        for(const a of dist.aVal) for(const it of a.itens) if(!it.quebra) campAlocadas.push(it.camp);
+        for(const a of dist.aSub) for(const it of a.itens) if(!it.quebra) campAlocadas.push(it.camp);
+      }
+      const ayUpdates = campanhas
+        .filter(c=>campAlocadas.includes(c.camp))
+        .map(c=>({range:`${calAba}!AY${c.rowIndex}`, values:[[today]]}));
+      if(ayUpdates.length>0){
+        const t2 = await getToken();
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CAL_ID}/values:batchUpdate`,{
+          method:'POST', headers:{Authorization:'Bearer '+t2,'Content-Type':'application/json'},
+          body:JSON.stringify({valueInputOption:'USER_ENTERED', data:ayUpdates})
+        });
+        log('Coluna AY preenchida em '+ayUpdates.length+' campanhas');
+      }
+    } catch(e2){ log('Aviso AY: '+e2.message); }
 
     log('Exportado com sucesso! '+totalLinhas+' linhas escritas.');
     document.getElementById('s2').className='step done';
