@@ -698,7 +698,14 @@ function renderBlocos() {
       }
       return jobs.map((job,k)=>{
         let qtdExibir='';
-        if(k===0&&it.quebra) qtdExibir=it.qtd;
+        if(it.quebra){
+          // Quebras: buscar quantidade do calendário pelo ID
+          const _cd = campanhas.find(c=>c.id===it.id) || quebras.find(q=>q.campanha===it.id);
+          if(job==='Clone Repeteco'||job.toLowerCase().includes('repet')) qtdExibir=_cd&&_cd.qtdRep?_cd.qtdRep:'';
+          else if(job==='ShopNext') qtdExibir=_cd?(((parseInt(_cd.libImg)||0)+(parseInt(_cd.libAmostra)||0))||''):'';
+          else if(job.toLowerCase().includes('valida')) qtdExibir=_cd&&_cd.qtdImg?_cd.qtdImg:'';
+          else qtdExibir='';
+        } else if(k===0&&it.quebra) qtdExibir=it.qtd;
         else if(job==='Clone Repeteco') qtdExibir=it.qtdRep||it.qtd||'';
         else if(job==='ShopNext') { const _q=(parseInt(it.libImg)||0)+(parseInt(it.libAmostra)||0); qtdExibir=_q>0?_q:''; }
         else if(job==='Subida MS') qtdExibir='';
