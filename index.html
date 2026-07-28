@@ -635,7 +635,7 @@ function renderDist(){
       if(a){
         const desc=c.libImg+c.libRep;
         const proc=[c.temSub?'Subida':'',desc>0?'Desc':'',c.temRep?'Rep':''].filter(Boolean).join('+');
-        a.itens.push({id:c.id,camp:c.camp,sd:c.sd,proc,qtd:desc>0?desc+' itens':c.qtdRep+' rep',quebra:false,sec,temRep:c.temRep,temDesc:desc>0});
+        a.itens.push({id:c.id,camp:c.camp,sd:c.sd,proc,qtd:desc>0?desc+' itens':c.qtdRep+' rep',quebra:false,sec,temRep:c.temRep,temDesc:desc>0,libImg:c.libImg,libAmostra:c.libAmostra||0});
         a.usado+=1;
       } else nao.push({nome:c.camp,proc:'Subida',qtd:'1 camp.',motivo:dir+' sem cap.'});
     }
@@ -692,7 +692,7 @@ function renderBlocos() {
         jobs.push(it.proc||'Subida');
       } else {
         if(it.temRep||it.proc.includes('Rep')) jobs.push('Clone Repeteco');
-        if(it.temDesc||it.proc.includes('Desc')) jobs.push('ShopNext');
+        if((it.libImg>0||it.libAmostra>0)||(it.temDesc||it.proc.includes('Desc'))) jobs.push('ShopNext');
         jobs.push('Subida MS');
       }
       return jobs.map((job,k)=>`<tr>
@@ -950,7 +950,7 @@ async function aprovar(){
         if(isSub){
           if(it.temRep||it.proc.includes('Rep'))
             linhasParaEscrever.push({id:it.id, job:'Clone Repeteco', status:'Não iniciada', prog:qtdRep||''});
-          if(it.temDesc||it.proc.includes('Desc'))
+          if((libImg>0||libAmostra>0)||(it.temDesc||it.proc.includes('Desc')))
             linhasParaEscrever.push({id:it.id, job:'ShopNext', status:'Não iniciada', prog:(libImg+libAmostra)||''});
           linhasParaEscrever.push({id:it.id, job:'Subida MS', status:'Não iniciada', prog:''});
         } else {
