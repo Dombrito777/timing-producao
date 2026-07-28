@@ -401,7 +401,8 @@ async function carregarDados() {
       const libAmostra=parseNum(gv(row,29));
 
       const temImg = qtdImg>0 && !!link && statusImg==='OK' && plotarImg==='PLOTAR';
-      const temRep = qtdRep>0 && plotarRep==='PLOTAR';
+      const temRep = qtdRep>0 && plotarRep==='PLOTAR'; // repeteco ainda a plotar
+      const repJaPlotado = qtdRep>0 && plotarRep==='PLOTADO'; // repeteco já plotado, só MS
 
       // Lógica de Subida:
       // 1. Repeteco pronto (AS = PLOTAR ou PLOTADO)
@@ -416,7 +417,7 @@ async function carregarDados() {
       const temSub = (repProntoParaMS || validacaoOk || apenasAmostra) && !validacaoPendente;
       if(!temImg && !temRep && !temSub) {_semProcesso++; continue;}
       const analCom=gv(row,6); // coluna G
-      campanhas.push({id,sd,camp,fiab,cat,analCom,qtdImg,qtdRep,libImg,libRep,libAmostra,temImg,temRep,temSub,rowIndex:r+1});
+      campanhas.push({id,sd,camp,fiab,cat,analCom,qtdImg,qtdRep,libImg,libRep,libAmostra,temImg,temRep,repJaPlotado,temSub,rowIndex:r+1});
     }
     log(`${campanhas.length} campanhas elegíveis | descartadas: semId=${_semId} semCamp=${_semCamp} fiabBaixa=${_fiabBaixa} jaPlotadoMS=${_plotadoCount} semProcesso=${_semProcesso}`);
 
@@ -635,7 +636,7 @@ function renderDist(){
       if(a){
         const desc=c.libImg+c.libRep;
         const proc=[c.temSub?'Subida':'',desc>0?'Desc':'',c.temRep?'Rep':''].filter(Boolean).join('+');
-        a.itens.push({id:c.id,camp:c.camp,sd:c.sd,proc,qtd:desc>0?desc+' itens':c.qtdRep+' rep',quebra:false,sec,temRep:c.temRep,temDesc:desc>0,libImg:c.libImg,libAmostra:c.libAmostra||0,qtdRep:c.qtdRep});
+        a.itens.push({id:c.id,camp:c.camp,sd:c.sd,proc,qtd:desc>0?desc+' itens':c.qtdRep+' rep',quebra:false,sec,temRep:c.temRep,repJaPlotado:c.repJaPlotado,temDesc:desc>0,libImg:c.libImg,libAmostra:c.libAmostra||0,qtdRep:c.qtdRep});
         a.usado+=1;
       } else nao.push({nome:c.camp,proc:'Subida',qtd:'1 camp.',motivo:dir+' sem cap.'});
     }
@@ -691,7 +692,7 @@ function renderBlocos() {
       if(it.quebra){
         jobs.push(it.proc||'Subida');
       } else {
-        if(it.temRep||it.proc.includes('Rep')) jobs.push('Clone Repeteco');
+        if(it.temRep) jobs.push('Clone Repeteco'); // só quando ainda precisa plotar
         if((it.libImg>0||it.libAmostra>0)||(it.temDesc||it.proc.includes('Desc'))) jobs.push('ShopNext');
         jobs.push('Subida MS');
       }
@@ -955,7 +956,7 @@ async function aprovar(){
         const libImg = campData ? campData.libImg : 0;
         const libAmostra = campData ? parseNum(String(campData.libAmostra||0)) : 0;
         if(isSub){
-          if(it.temRep||it.proc.includes('Rep'))
+          if(it.temRep)
             linhasParaEscrever.push({id:it.id, job:'Clone Repeteco', status:'Não iniciada', prog:qtdRep||''});
           if((libImg>0||libAmostra>0)||(it.temDesc||it.proc.includes('Desc')))
             linhasParaEscrever.push({id:it.id, job:'ShopNext', status:'Não iniciada', prog:(libImg+libAmostra)||''});
