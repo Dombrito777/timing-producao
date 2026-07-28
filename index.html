@@ -634,7 +634,7 @@ function renderDist(){
       const sec=!a;
       if(!a) a=aSub.find(x=>x.sec.includes(dir)&&x.usado<x.cap);
       if(a){
-        const desc=c.libImg+c.libRep;
+        const desc=c.libImg+c.libAmostra;
         const proc=[c.temSub?'Subida':'',desc>0?'Desc':'',c.temRep?'Rep':''].filter(Boolean).join('+');
         a.itens.push({id:c.id,camp:c.camp,sd:c.sd,proc,qtd:desc>0?desc+' itens':c.qtdRep+' rep',quebra:false,sec,temRep:c.temRep,repJaPlotado:c.repJaPlotado,temDesc:desc>0,libImg:c.libImg,libAmostra:c.libAmostra||0,qtdRep:c.qtdRep});
         a.usado+=1;
@@ -700,7 +700,7 @@ function renderBlocos() {
         let qtdExibir='';
         if(k===0&&it.quebra) qtdExibir=it.qtd;
         else if(job==='Clone Repeteco') qtdExibir=it.qtdRep||it.qtd||'';
-        else if(job==='ShopNext') { const _li=parseInt(it.libImg)||0; const _la=parseInt(it.libAmostra)||0; const _q=_li+_la; qtdExibir=_q>0?String(_q):String(it.libImg||'')+'|'+String(it.libAmostra||''); }
+        else if(job==='ShopNext') { const _q=(parseInt(it.libImg)||0)+(parseInt(it.libAmostra)||0); qtdExibir=_q>0?_q:''; }
         else if(job==='Subida MS') qtdExibir='';
         else qtdExibir=it.qtd||'';
         return `<tr>
