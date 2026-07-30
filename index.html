@@ -548,7 +548,8 @@ function extrairQuebras(rows) {
       const isVal=job.includes('valida')||job.includes('imagem')||job.includes('amostra');
       const campNome=(row[b.campCol]||'').trim();
       const campSD=(row[b.sdCol]||'').trim();
-      result.push({analista:b.nome, tipo:isVal?'val':'sub', qtd:1, campanha:id, campNome, campSD, job:(row[b.jobCol]||'').trim()});
+      const _prog=(row[b.idCol+7]||'').trim();
+      result.push({analista:b.nome, tipo:isVal?'val':'sub', qtd:_prog||1, campanha:id, campNome, campSD, job:(row[b.jobCol]||'').trim()});
     }
   }
   log(result.length+' quebras: '+result.slice(0,5).map(q=>q.analista+'/'+q.campanha).join(', '));
