@@ -419,7 +419,7 @@ async function carregarDados() {
       if(!temImg && !temRep && !temSub) {_semProcesso++; continue;}
       const analCom=gv(row,6); // coluna G
       // Salvar no mapa global para lookup de quebras
-      campMap[String(id)]={camp,qtdImg:parseNum(gv(row,31)),qtdRep:parseNum(gv(row,43)),libImg:parseNum(gv(row,41)),libAmostra:parseNum(gv(row,29)),analCom};
+      campMap[String(id).trim()]={camp,qtdImg:parseNum(gv(row,31)),qtdRep:parseNum(gv(row,43)),libImg:parseNum(gv(row,41)),libAmostra:parseNum(gv(row,29)),analCom};
       campanhas.push({id,sd,camp,fiab,cat,analCom,qtdImg,qtdRep,libImg,libRep,libAmostra,temImg,temRep,repJaPlotado,temSub,rowIndex:r+1});
     }
     log(`${campanhas.length} campanhas elegíveis | descartadas: semId=${_semId} semCamp=${_semCamp} fiabBaixa=${_fiabBaixa} jaPlotadoMS=${_plotadoCount} semProcesso=${_semProcesso}`);
@@ -474,7 +474,8 @@ async function carregarDados() {
         const _primeira = _linhasOntem[0];
         const _ultima = _linhasOntem[_linhasOntem.length-1];
         const timHead = await sheetGet(TIM_ID, `${timAba}!A1:GK2`);
-        const timData = await sheetGet(TIM_ID, `${timAba}!A${_primeira}:GK${_ultima}`);
+        const timDataRaw = await sheetGet(TIM_ID, `${timAba}!A${_primeira}:GK${_ultima}`);
+        const timData = timDataRaw.map(r=>{ const p=[...r]; while(p.length<193) p.push(''); return p; });
         const timRows = [...timHead, ...timData];
         log('Lendo '+timData.length+' linhas de ontem');
         quebras = extrairQuebras(timRows, true);
@@ -613,7 +614,7 @@ function renderDist(){
   const aVal=ANALISTAS_VAL.map(a=>{
     const q=quebras.filter(x=>x.analista===a.nome&&x.tipo==='val').reduce((s,x)=>s+x.qtd,0);
     const itens=quebras.filter(x=>x.analista===a.nome&&x.tipo==='val').map(x=>{
-      const _cd=campMap[String(x.campanha)]||campanhas.find(c=>c.id===String(x.campanha));
+      const _cd=campMap[String(x.campanha).trim()]||campanhas.find(c=>c.id===String(x.campanha).trim());
       const _nome1=(_cd&&_cd.camp)||x.campNome||x.campanha;
       return {id:x.campanha,camp:_nome1,sd:x.campSD||'',proc:x.job||'Imagem',qtd:_cd?(_cd.qtdImg||0):0,quebra:true,libImg:_cd?(_cd.libImg||0):0,libAmostra:_cd?(_cd.libAmostra||0):0,qtdRep:_cd?(_cd.qtdRep||0):0};
     });
@@ -622,7 +623,7 @@ function renderDist(){
   const aSub=ANALISTAS_SUB.map(a=>{
     const q=quebras.filter(x=>x.analista===a.nome&&x.tipo==='sub').reduce((s,x)=>s+x.qtd,0);
     const itens=quebras.filter(x=>x.analista===a.nome&&x.tipo==='sub').map(x=>{
-      const _cd=campMap[String(x.campanha)]||campanhas.find(c=>c.id===String(x.campanha));
+      const _cd=campMap[String(x.campanha).trim()]||campanhas.find(c=>c.id===String(x.campanha).trim());
       const _nome2=(_cd&&_cd.camp)||x.campNome||x.campanha;
       return {id:x.campanha,camp:_nome2,sd:x.campSD||'',proc:x.job||'Subida',qtd:_cd?(_cd.qtdRep||0):0,quebra:true,sec:false,libImg:_cd?(_cd.libImg||0):0,libAmostra:_cd?(_cd.libAmostra||0):0,qtdRep:_cd?(_cd.qtdRep||0):0,temRep:_cd?(_cd.temRep||false):false,repJaPlotado:_cd?(_cd.repJaPlotado||false):false};
     });
