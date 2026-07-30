@@ -326,7 +326,7 @@ function todayDMY(){const d=new Date();return `${String(d.getDate()).padStart(2,
 function todayDM(){const d=new Date();return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;}
 
 // ── DADOS GLOBAIS ─────────────────────────────────────────────────
-let campanhas=[], quebras=[], dist=null;
+let campanhas=[], quebras=[], dist=null, campMap={};
 
 // ── CARREGAR ──────────────────────────────────────────────────────
 async function carregarDados() {
@@ -364,7 +364,7 @@ async function carregarDados() {
     // AR=43:QtdRep, AS=44:PlotarRep, AU=46:LibRep
     // AY=50:DataEntregaMS, AZ=51:PlotadoMS
     campanhas=[];
-    const campMap={}; // mapa completo id->dados para lookup das quebras
+    campMap={}; // mapa completo id->dados para lookup das quebras
     let _semId=0,_semCamp=0,_fiabBaixa=0,_plotadoCount=0,_semProcesso=0;
     // Função auxiliar: retorna valor de uma coluna, tratando boolean e linhas curtas
     function gv(row, idx) {
