@@ -401,7 +401,7 @@ async function carregarDados() {
       // AD = índice 29 (Liberado Produção Amostra)
       const libAmostra=parseNum(gv(row,29));
 
-      const temImg = qtdImg>0 && !!link && statusImg.toUpperCase()==='OK' && plotarImg==='PLOTAR';
+      const temImg = qtdImg>0 && statusImg.toUpperCase()==='OK' && plotarImg==='PLOTAR';
       const temRep = qtdRep>0 && plotarRep==='PLOTAR'; // repeteco ainda a plotar
       const repJaPlotado = qtdRep>0 && plotarRep==='PLOTADO'; // repeteco já plotado, só MS
 
