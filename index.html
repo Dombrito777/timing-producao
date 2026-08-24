@@ -612,7 +612,8 @@ function renderAnalistas(){
 
 function renderDist(){
   const aVal=ANALISTAS_VAL.map(a=>{
-    const q=quebras.filter(x=>x.analista===a.nome&&x.tipo==='val').reduce((s,x)=>s+x.qtd,0);
+    // Quebras NÃO consomem capacidade em validação - usado só para exibição
+    const q=0;
     const itens=quebras.filter(x=>x.analista===a.nome&&x.tipo==='val').map(x=>{
       const _cd=campMap[String(x.campanha).trim()]||campanhas.find(c=>c.id===String(x.campanha).trim());
       const _nome1=(_cd&&_cd.camp)||x.campNome||x.campanha;
