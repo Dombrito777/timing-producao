@@ -326,7 +326,7 @@ function todayDMY(){const d=new Date();return `${String(d.getDate()).padStart(2,
 function todayDM(){const d=new Date();return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;}
 
 // ── DADOS GLOBAIS ─────────────────────────────────────────────────
-let campanhas=[], quebras=[], dist=null, campMap={};
+let campanhas=[], quebras=[], dist=null, campMap={}, mesMap=[];
 
 // ── CARREGAR ──────────────────────────────────────────────────────
 async function carregarDados() {
@@ -365,24 +365,34 @@ async function carregarDados() {
     // AY=50:DataEntregaMS, AZ=51:PlotadoMS
     campanhas=[];
     campMap={}; // mapa completo id->dados para lookup das quebras
+    mesMap=[]; // todas campanhas do mês (para métricas)
     let _semId=0,_semCamp=0,_fiabBaixa=0,_plotadoCount=0,_semProcesso=0;
-    // Função auxiliar: retorna valor de uma coluna, tratando boolean e linhas curtas
     function gv(row, idx) {
       const v = row[idx];
       if(v === undefined || v === null) return '';
       if(typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
       return String(v).trim();
     }
+    const _mesAtual = new Date().getMonth()+1;
     for (let r=3;r<rows.length;r++) {
       const row=rows[r];
       const id=gv(row,1);
       if(!id||id==='ID') {_semId++; continue;}
       const camp=gv(row,3);
       if(!camp) {_semCamp++; continue;}
-      const fiab=parsePct(gv(row,5));
-      if(fiab<30) {_fiabBaixa++; continue;}
       const sd=gv(row,2);
       const cat=gv(row,7);
+      const statusImgRaw=gv(row,35).toUpperCase();
+      const statusAmostra=gv(row,26).toUpperCase(); // AA
+      const plotadoMSraw=gv(row,51).toUpperCase();
+      // Capturar TODAS campanhas do mês (para métricas mensais) - exceto canceladas
+      const _sdMes = parseInt((sd.split('/')[1]||'0'));
+      const _cancelada = statusImgRaw==='CANCELADA'||statusAmostra==='CANCELADA';
+      if(_sdMes===_mesAtual && !_cancelada){
+        mesMap.push({id, sd, dir:getDir(cat), plotado:(plotadoMSraw==='TRUE'||plotadoMSraw==='VERDADEIRO')});
+      }
+      const fiab=parsePct(gv(row,5));
+      if(fiab<30) {_fiabBaixa++; continue;}
       // Filtro AZ: já plotado no MS
       const plotadoMS=gv(row,51).toUpperCase();
       if(plotadoMS==='VERDADEIRO'||plotadoMS==='TRUE') {_plotadoCount++; continue;}
@@ -419,7 +429,7 @@ async function carregarDados() {
       if(!temImg && !temRep && !temSub) {_semProcesso++; continue;}
       const analCom=gv(row,6); // coluna G
       // Salvar no mapa global para lookup de quebras
-      campMap[String(id).trim()]={camp,qtdImg:parseNum(gv(row,31)),qtdRep:parseNum(gv(row,43)),libImg:parseNum(gv(row,41)),libAmostra:parseNum(gv(row,29)),analCom};
+      campMap[String(id).trim()]={camp,sd,qtdImg:parseNum(gv(row,31)),qtdRep:parseNum(gv(row,43)),libImg:parseNum(gv(row,41)),libAmostra:parseNum(gv(row,29)),analCom,plotadoMS,statusImg,dir:getDir(cat)};
       campanhas.push({id,sd,camp,fiab,cat,analCom,qtdImg,qtdRep,libImg,libRep,libAmostra,temImg,temRep,repJaPlotado,temSub,rowIndex:r+1});
     }
     log(`${campanhas.length} campanhas elegíveis | descartadas: semId=${_semId} semCamp=${_semCamp} fiabBaixa=${_fiabBaixa} jaPlotadoMS=${_plotadoCount} semProcesso=${_semProcesso}`);
@@ -559,11 +569,57 @@ function extrairQuebras(rows) {
 
 // ── RENDER ────────────────────────────────────────────────────────
 function renderVisao(){
+  // Métricas por diretoria
+  const porDir = {'Fashion':0,'Kids':0,'Shoes':0,'Home & Decor':0};
+  campanhas.forEach(c=>{ const d=getDir(c.cat); if(porDir[d]!==undefined) porDir[d]++; });
+
+  // Quebras só de MS (subida)
+  const quebrasMS = quebras.filter(q=>q.tipo==='sub').length;
+
+  // Capacidade do time vs alocado (subida)
+  const capSubTotal = ANALISTAS_SUB.reduce((s,a)=>s+a.cap,0);
+  let alocadoSub = 0;
+  if(dist) dist.aSub.forEach(a=>{ alocadoSub += a.itens.filter(i=>!i.quebra).length; });
+
+  // Campanha mais urgente (menor SD)
+  const sortedMetric = [...campanhas].sort((a,b)=>{
+    const da=a.sd.split('/').slice(0,2).reverse().join('');
+    const db=b.sd.split('/').slice(0,2).reverse().join('');
+    return da.localeCompare(db);
+  });
+  const maisUrgente = sortedMetric[0] ? sortedMetric[0].sd.substring(0,5) : '—';
+
+  // % do mês que falta plotar MS
+  const totalMes = mesMap.length;
+  const plotadosMes = mesMap.filter(c=>c.plotado).length;
+  const faltaMes = totalMes - plotadosMes;
+  const pctFalta = totalMes>0 ? Math.round(faltaMes/totalMes*100) : 0;
+
+  // Capacidade do mês vs entregue
+  // Dias úteis do mês
+  const hoje = new Date();
+  const ano = hoje.getFullYear(), mes = hoje.getMonth();
+  let diasUteis = 0;
+  const ultimoDia = new Date(ano, mes+1, 0).getDate();
+  for(let d=1; d<=ultimoDia; d++){
+    const dow = new Date(ano, mes, d).getDay();
+    if(dow!==0 && dow!==6) diasUteis++;
+  }
+  const capMes = diasUteis * 2 * ANALISTAS_SUB.length;
+
   document.getElementById('metrics').innerHTML=`
     <div class="metric"><div class="metric-label">Campanhas elegíveis</div><div class="metric-value">${campanhas.length}</div></div>
-    <div class="metric"><div class="metric-label">Com imagem p/ validar</div><div class="metric-value">${campanhas.filter(c=>c.temImg).length}</div></div>
-    <div class="metric"><div class="metric-label">Para subida</div><div class="metric-value">${campanhas.filter(c=>c.temSub||c.temRep).length}</div></div>
-    <div class="metric"><div class="metric-label">Quebras ontem</div><div class="metric-value">${quebras.length}</div></div>`;
+    <div class="metric"><div class="metric-label">Quebras MS</div><div class="metric-value">${quebrasMS}</div></div>
+    <div class="metric"><div class="metric-label">Subida: alocado / capacidade</div><div class="metric-value" style="font-size:20px">${alocadoSub} / ${capSubTotal}</div></div>
+    <div class="metric"><div class="metric-label">SD mais próximo</div><div class="metric-value" style="font-size:20px">${maisUrgente}</div></div>
+    <div class="metric"><div class="metric-label">Falta plotar MS (mês)</div><div class="metric-value">${pctFalta}%</div><div style="font-size:11px;color:var(--text-sec);margin-top:2px">${faltaMes} de ${totalMes}</div></div>
+    <div class="metric"><div class="metric-label">Capacidade mês / entregue</div><div class="metric-value" style="font-size:20px">${plotadosMes} / ${capMes}</div></div>
+    <div class="metric" style="grid-column:span 2"><div class="metric-label">Campanhas por diretoria</div><div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap">
+      <span class="badge b-fashion">Fashion: ${porDir['Fashion']}</span>
+      <span class="badge b-kids">Kids: ${porDir['Kids']}</span>
+      <span class="badge b-shoes">Shoes: ${porDir['Shoes']}</span>
+      <span class="badge b-home">Home & Decor: ${porDir['Home & Decor']}</span>
+    </div></div>`;
   const sorted=[...campanhas].sort((a,b)=>{
     const da=a.sd.split('/').slice(0,2).reverse().join('');
     const db=b.sd.split('/').slice(0,2).reverse().join('');
