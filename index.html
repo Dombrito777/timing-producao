@@ -1419,10 +1419,15 @@
             <div id="chart-dir"></div>
           </section>
           <section style="display:flex;flex-direction:column;gap:16px">
-            <div style="display:flex;align-items:center;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <span style="font-family:'Material Symbols Outlined';font-size:20px;color:#66dd9a">insights</span>
               <h2 style="font-family:Manrope,sans-serif;font-size:17px;font-weight:800;letter-spacing:-.02em;color:#e5e2e1;margin:0">Gestão</h2>
-              <span style="font-size:12px;color:#899389">visão do mês</span>
+              <span id="gestao-sub" style="font-size:12px;color:#899389">visão do mês</span>
+              <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+                <span style="font-size:12px;color:#899389">Plotar MS até:</span>
+                <input type="date" id="periodo-ms" style="background:#1c1b1b;border:1px solid rgba(63,73,65,.5);border-radius:9px;color:#e5e2e1;font-family:Inter,sans-serif;font-size:13px;padding:6px 10px">
+                <button id="periodo-reset" style="background:transparent;border:1px solid rgba(63,73,65,.5);border-radius:9px;color:#bfc9be;font-family:Inter,sans-serif;font-size:12px;font-weight:600;padding:6px 10px;cursor:pointer">Mês cheio</button>
+              </div>
             </div>
             <div id="metrics-gestao" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px"></div>
             <div id="chart-mes"></div>
@@ -1720,6 +1725,15 @@ async function sheetMeta(id) {
 // ── UTILS ─────────────────────────────────────────────────────────
 function parseNum(v){return parseInt((v||'').toString().replace(/\D/g,''))||0;}
 function parsePct(v){return parseFloat((v||'').toString().replace('%','').replace(',','.'))||0;}
+function parseSD(sd){ // "DD/MM/AAAA" -> Date (meia-noite local); null se inválida
+  if(!sd) return null;
+  const p = sd.trim().split('/');
+  if(p.length<3) return null;
+  const d=parseInt(p[0]), m=parseInt(p[1]), a=parseInt(p[2]);
+  if(!d||!m||!a) return null;
+  return new Date(a, m-1, d);
+}
+let periodoMS = null; // Date limite "plotar MS até"; null = mês cheio
 function todayDMY(){const d=new Date();return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;}
 function q(id){ return document.getElementById(id); }
 function log(msg){
@@ -1798,7 +1812,7 @@ async function carregarDados() {
       const _sdMes = parseInt((sd.split('/')[1]||'0'));
       const _cancelada = statusImgRaw==='CANCELADA'||statusAmostra==='CANCELADA';
       if(_sdMes===_mesAtual && !_cancelada){
-        mesMap.push({id, sd, dir:getDir(cat), plotado:(plotadoMSraw==='TRUE'||plotadoMSraw==='VERDADEIRO')});
+        mesMap.push({id, sd, sdDate:parseSD(sd), dir:getDir(cat), plotado:(plotadoMSraw==='TRUE'||plotadoMSraw==='VERDADEIRO')});
       }
       // Backlogs totais (sem recorte de mês, sem filtros de fiab/AZ)
       if(gv(row,38).toUpperCase()==='PLOTAR') backlog.validacao++;
@@ -2038,14 +2052,19 @@ function renderVisao(){
     return da.localeCompare(db);
   });
   const maisUrgente = sortedMetric[0] ? sortedMetric[0].sd.substring(0,5) : '—';
-  const totalMes = mesMap.length;
-  const plotadosMes = mesMap.filter(c=>c.plotado).length;
+  // Recorte de período: de hoje até a data escolhida (ignora o que já passou)
+  const _hoje0 = new Date(); _hoje0.setHours(0,0,0,0);
+  const mesScope = periodoMS
+    ? mesMap.filter(c=> c.sdDate && c.sdDate >= _hoje0 && c.sdDate <= periodoMS)
+    : mesMap;
+  const totalMes = mesScope.length;
+  const plotadosMes = mesScope.filter(c=>c.plotado).length;
   const faltaMes = totalMes - plotadosMes;
   const pctPlotado = totalMes>0 ? Math.round(plotadosMes/totalMes*100) : 0;
 
-  // Faltam plotar no mês, por diretoria (mesmo recorte do donut, detalhado)
+  // Faltam plotar no período, por diretoria (mesmo recorte do donut, detalhado)
   const faltaDir = {'Fashion':0,'Kids':0,'Shoes':0,'Home & Decor':0};
-  mesMap.forEach(c=>{ if(!c.plotado && faltaDir[c.dir]!==undefined) faltaDir[c.dir]++; });
+  mesScope.forEach(c=>{ if(!c.plotado && faltaDir[c.dir]!==undefined) faltaDir[c.dir]++; });
   const hoje = new Date();
   const ano = hoje.getFullYear(), mes = hoje.getMonth();
   let diasUteis = 0;
@@ -2069,9 +2088,14 @@ function renderVisao(){
     metric('Auditoria · Auditar Catálogo', backlog.auditarCatalogo, 'aguardando auditoria de catálogo') +
     metric('Auditoria · Não Auditada', backlog.naoAuditada, 'ainda não auditadas');
 
-  q('chart-mes').innerHTML = donut(pctPlotado, 'Avanço do mês no MS', `${plotadosMes} plotadas · ${faltaMes} restantes de ${totalMes}`);
+  const _ate = periodoMS ? ` (até ${String(periodoMS.getDate()).padStart(2,'0')}/${String(periodoMS.getMonth()+1).padStart(2,'0')})` : '';
+  const _tituloMS = periodoMS ? 'Avanço do MS no período' : 'Avanço do mês no MS';
+  const _tituloDir = periodoMS ? 'Faltam plotar no período por diretoria' : 'Faltam plotar no mês por diretoria';
+  const _subGestao = q('gestao-sub'); if(_subGestao) _subGestao.textContent = periodoMS ? 'período personalizado'+_ate : 'visão do mês';
 
-  q('chart-dir').innerHTML = barsCard('Faltam plotar no mês por diretoria', `${faltaMes} campanhas restantes no MS, detalhadas por diretoria.`,
+  q('chart-mes').innerHTML = donut(pctPlotado, _tituloMS, `${plotadosMes} plotadas · ${faltaMes} restantes de ${totalMes}`);
+
+  q('chart-dir').innerHTML = barsCard(_tituloDir, `${faltaMes} campanhas restantes no MS, detalhadas por diretoria.`,
     Object.keys(faltaDir).map(d=>({label:d, value:faltaDir[d], color:DIR_COLOR[d]})), '');
 
   const sorted=[...campanhas].sort((a,b)=>{
@@ -2613,6 +2637,17 @@ document.addEventListener('DOMContentLoaded', function(){
   window.__campLimit = 60;
   buildSidebar();
   wireActions();
+  var _per = q('periodo-ms');
+  if(_per) _per.addEventListener('change', function(){
+    if(this.value){ var p=this.value.split('-'); periodoMS=new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])); }
+    else periodoMS=null;
+    if(typeof renderVisao==='function' && mesMap.length) renderVisao();
+  });
+  var _rst = q('periodo-reset');
+  if(_rst) _rst.addEventListener('click', function(){
+    periodoMS=null; var pi=q('periodo-ms'); if(pi) pi.value='';
+    if(typeof renderVisao==='function' && mesMap.length) renderVisao();
+  });
   applyPage('dashboard');
   renderStepBar(2);
   carregarDados();
