@@ -2082,7 +2082,27 @@ function renderVisao(){
     metric('Subidas D-0', `${alocadoSub}<span style="font-size:18px;color:${C.dim}">/${capSubTotal}</span>`, 'campanhas alocadas / capacidade') +
     metric('SD mais próximo', maisUrgente, 'próxima data de subida');
 
+  // Ritmo necessário: campanhas restantes no período ÷ dias úteis de hoje até a data
+  let ritmoCard = '';
+  if(periodoMS){
+    let diasUteisPeriodo = 0;
+    const _d = new Date(_hoje0);
+    while(_d <= periodoMS){
+      const dow = _d.getDay();
+      if(dow!==0 && dow!==6) diasUteisPeriodo++;
+      _d.setDate(_d.getDate()+1);
+    }
+    const capDia = 2 * ANALISTAS_SUB.length;
+    const ritmo = diasUteisPeriodo>0 ? Math.ceil(faltaMes/diasUteisPeriodo) : faltaMes;
+    const apertado = ritmo > capDia;
+    ritmoCard = metric('Ritmo necessário',
+      `${ritmo}<span style="font-size:18px;color:${C.dim}">/dia</span>`,
+      `${faltaMes} em ${diasUteisPeriodo} dias úteis · capacidade ${capDia}/dia`,
+      apertado?'#f0b37e':'#66dd9a');
+  }
+
   q('metrics-gestao').innerHTML =
+    ritmoCard +
     metric('Entregue no mês', `${plotadosMes}<span style="font-size:18px;color:${C.dim}">/${capMes}</span>`, `${diasUteis} dias úteis · capacidade teórica`) +
     metric('Backlog validação', backlog.validacao, 'campanhas com imagem a plotar') +
     metric('Auditoria · Auditar Catálogo', backlog.auditarCatalogo, 'aguardando auditoria de catálogo') +
