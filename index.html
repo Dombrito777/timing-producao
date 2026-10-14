@@ -1408,12 +1408,25 @@
           Lendo planilhas de calendário e timing…
         </div>
         <div id="visao-error" style="display:none;padding:14px 16px;border-radius:12px;background:rgba(255,180,171,.08);border:1px solid rgba(255,180,171,.3);color:#ffb4ab;font-size:13px"></div>
-        <div id="visao-content" style="display:none;flex-direction:column;gap:22px">
-          <div id="metrics" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px"></div>
-          <div id="charts-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:stretch">
-            <div id="chart-mes"></div>
+        <div id="visao-content" style="display:none;flex-direction:column;gap:30px">
+          <section style="display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-family:'Material Symbols Outlined';font-size:20px;color:#66dd9a">event_available</span>
+              <h2 style="font-family:Manrope,sans-serif;font-size:17px;font-weight:800;letter-spacing:-.02em;color:#e5e2e1;margin:0">Planejamento</h2>
+              <span style="font-size:12px;color:#899389">operação do dia</span>
+            </div>
+            <div id="metrics-plan" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px"></div>
             <div id="chart-dir"></div>
-          </div>
+          </section>
+          <section style="display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-family:'Material Symbols Outlined';font-size:20px;color:#66dd9a">insights</span>
+              <h2 style="font-family:Manrope,sans-serif;font-size:17px;font-weight:800;letter-spacing:-.02em;color:#e5e2e1;margin:0">Gestão</h2>
+              <span style="font-size:12px;color:#899389">visão do mês</span>
+            </div>
+            <div id="metrics-gestao" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px"></div>
+            <div id="chart-mes"></div>
+          </section>
           <div id="chart-ocup"></div>
           <div style="background:#1c1b1b;border:1px solid rgba(63,73,65,.45);border-radius:16px;overflow:hidden">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid rgba(63,73,65,.35)">
@@ -2045,10 +2058,12 @@ function renderVisao(){
     ${sub?`<div style="font-size:11.5px;color:${C.dim};margin-top:7px">${sub}</div>`:''}
   </div>`;
 
-  q('metrics').innerHTML =
+  q('metrics-plan').innerHTML =
     metric('Quebras herdadas (MS)', quebrasMS, quebrasMS?'já descontadas da capacidade':'nenhuma pendência de ontem', quebrasMS?'#f0b37e':C.txt) +
-    metric('Subida hoje', `${alocadoSub}<span style="font-size:18px;color:${C.dim}">/${capSubTotal}</span>`, 'campanhas alocadas / capacidade') +
-    metric('SD mais próximo', maisUrgente, 'próxima data de subida') +
+    metric('Subidas D-0', `${alocadoSub}<span style="font-size:18px;color:${C.dim}">/${capSubTotal}</span>`, 'campanhas alocadas / capacidade') +
+    metric('SD mais próximo', maisUrgente, 'próxima data de subida');
+
+  q('metrics-gestao').innerHTML =
     metric('Entregue no mês', `${plotadosMes}<span style="font-size:18px;color:${C.dim}">/${capMes}</span>`, `${diasUteis} dias úteis · capacidade teórica`) +
     metric('Backlog validação', backlog.validacao, 'campanhas com imagem a plotar') +
     metric('Auditoria · Auditar Catálogo', backlog.auditarCatalogo, 'aguardando auditoria de catálogo') +
