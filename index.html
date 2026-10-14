@@ -1723,6 +1723,7 @@ function setSync(state, label){
 
 // ── DADOS GLOBAIS ─────────────────────────────────────────────────
 let campanhas=[], quebras=[], dist=null, campMap={}, mesMap=[];
+let backlog={validacao:0, auditarCatalogo:0, naoAuditada:0};
 
 function initDataReferencia() {
   const campo = q('data-referencia');
@@ -1761,6 +1762,7 @@ async function carregarDados() {
     log(`${rows.length} linhas lidas (preenchidas até col AZ)`);
 
     campanhas=[]; campMap={}; mesMap=[];
+    backlog={validacao:0, auditarCatalogo:0, naoAuditada:0};
     let _semId=0,_semCamp=0,_fiabBaixa=0,_plotadoCount=0,_semProcesso=0;
     function gv(row, idx) {
       const v = row[idx];
@@ -1785,6 +1787,11 @@ async function carregarDados() {
       if(_sdMes===_mesAtual && !_cancelada){
         mesMap.push({id, sd, dir:getDir(cat), plotado:(plotadoMSraw==='TRUE'||plotadoMSraw==='VERDADEIRO')});
       }
+      // Backlogs totais (sem recorte de mês, sem filtros de fiab/AZ)
+      if(gv(row,38).toUpperCase()==='PLOTAR') backlog.validacao++;
+      const _statusAud = gv(row,16).toUpperCase();
+      if(_statusAud==='AUDITAR CATÁLOGO'||_statusAud==='AUDITAR CATALOGO') backlog.auditarCatalogo++;
+      if(_statusAud==='NÃO AUDITADA'||_statusAud==='NAO AUDITADA') backlog.naoAuditada++;
       const fiab=parsePct(gv(row,5));
       if(fiab<30) {_fiabBaixa++; continue;}
       const plotadoMS=gv(row,51).toUpperCase();
@@ -2008,8 +2015,6 @@ function renderStepBar(step) {
 
 // ── RENDER ────────────────────────────────────────────────────────
 function renderVisao(){
-  const porDir = {'Fashion':0,'Kids':0,'Shoes':0,'Home & Decor':0};
-  campanhas.forEach(c=>{ const d=getDir(c.cat); if(porDir[d]!==undefined) porDir[d]++; });
   const quebrasMS = quebras.filter(q=>q.tipo==='sub').length;
   const capSubTotal = ANALISTAS_SUB.reduce((s,a)=>s+a.cap,0);
   let alocadoSub = 0;
@@ -2024,18 +2029,16 @@ function renderVisao(){
   const plotadosMes = mesMap.filter(c=>c.plotado).length;
   const faltaMes = totalMes - plotadosMes;
   const pctPlotado = totalMes>0 ? Math.round(plotadosMes/totalMes*100) : 0;
+
+  // Faltam plotar no mês, por diretoria (mesmo recorte do donut, detalhado)
+  const faltaDir = {'Fashion':0,'Kids':0,'Shoes':0,'Home & Decor':0};
+  mesMap.forEach(c=>{ if(!c.plotado && faltaDir[c.dir]!==undefined) faltaDir[c.dir]++; });
   const hoje = new Date();
   const ano = hoje.getFullYear(), mes = hoje.getMonth();
   let diasUteis = 0;
   const ultimoDia = new Date(ano, mes+1, 0).getDate();
   for(let d=1; d<=ultimoDia; d++){ const dow = new Date(ano, mes, d).getDay(); if(dow!==0 && dow!==6) diasUteis++; }
   const capMes = diasUteis * 2 * ANALISTAS_SUB.length;
-  const procCount = {
-    'Imagem': campanhas.filter(c=>c.temImg).length,
-    'Repeteco': campanhas.filter(c=>c.temRep).length,
-    'Subida': campanhas.filter(c=>c.temSub).length
-  };
-
   const metric = (label, value, sub, cor) => `<div style="${S.metric}">
     <div style="${S.label}">${label}</div>
     <div style="${S.value}${cor?'color:'+cor+';':''}">${value}</div>
@@ -2043,18 +2046,18 @@ function renderVisao(){
   </div>`;
 
   q('metrics').innerHTML =
-    metric('Campanhas elegíveis', campanhas.length, 'material liberado, aguardando plot') +
     metric('Quebras herdadas (MS)', quebrasMS, quebrasMS?'já descontadas da capacidade':'nenhuma pendência de ontem', quebrasMS?'#f0b37e':C.txt) +
     metric('Subida hoje', `${alocadoSub}<span style="font-size:18px;color:${C.dim}">/${capSubTotal}</span>`, 'campanhas alocadas / capacidade') +
     metric('SD mais próximo', maisUrgente, 'próxima data de subida') +
-    metric('Entregue no mês', `${plotadosMes}<span style="font-size:18px;color:${C.dim}">/${capMes}</span>`, `${diasUteis} dias úteis · capacidade teórica`);
+    metric('Entregue no mês', `${plotadosMes}<span style="font-size:18px;color:${C.dim}">/${capMes}</span>`, `${diasUteis} dias úteis · capacidade teórica`) +
+    metric('Backlog validação', backlog.validacao, 'campanhas com imagem a plotar') +
+    metric('Auditoria · Auditar Catálogo', backlog.auditarCatalogo, 'aguardando auditoria de catálogo') +
+    metric('Auditoria · Não Auditada', backlog.naoAuditada, 'ainda não auditadas');
 
   q('chart-mes').innerHTML = donut(pctPlotado, 'Avanço do mês no MS', `${plotadosMes} plotadas · ${faltaMes} restantes de ${totalMes}`);
 
-  q('chart-dir').innerHTML = barsCard('Campanhas elegíveis por diretoria', 'Distribuição da fila atual, com o volume de jobs por processo abaixo.',
-    Object.keys(porDir).map(d=>({label:d, value:porDir[d], color:DIR_COLOR[d]}))
-      .concat([{label:'—', value:0, color:'transparent'}])
-      .concat(Object.keys(procCount).map(p=>({label:p, value:procCount[p], color:PROC_COLOR[p]}))), '');
+  q('chart-dir').innerHTML = barsCard('Faltam plotar no mês por diretoria', `${faltaMes} campanhas restantes no MS, detalhadas por diretoria.`,
+    Object.keys(faltaDir).map(d=>({label:d, value:faltaDir[d], color:DIR_COLOR[d]})), '');
 
   const sorted=[...campanhas].sort((a,b)=>{
     const da=a.sd.split('/').slice(0,2).reverse().join('');
