@@ -1811,8 +1811,8 @@ async function carregarDados() {
       const plotadoMSraw=gv(row,51).toUpperCase();
       const _sdMes = parseInt((sd.split('/')[1]||'0'));
       const _cancelada = statusImgRaw==='CANCELADA'||statusAmostra==='CANCELADA';
-      if(_sdMes===_mesAtual && !_cancelada){
-        mesMap.push({id, sd, sdDate:parseSD(sd), dir:getDir(cat), plotado:(plotadoMSraw==='TRUE'||plotadoMSraw==='VERDADEIRO')});
+      if(!_cancelada){
+        mesMap.push({id, sd, sdDate:parseSD(sd), sdMes:_sdMes, dir:getDir(cat), plotado:(plotadoMSraw==='TRUE'||plotadoMSraw==='VERDADEIRO')});
       }
       // Backlogs totais (sem recorte de mês, sem filtros de fiab/AZ)
       if(gv(row,38).toUpperCase()==='PLOTAR') backlog.validacao++;
@@ -1844,7 +1844,7 @@ async function carregarDados() {
       const temSub = (repProntoParaMS || validacaoOk || apenasAmostra) && !validacaoPendente;
       if(!temImg && !temRep && !temSub) {_semProcesso++; continue;}
       const analCom=gv(row,6);
-      campMap[String(id).trim()]={camp,sd,qtdImg:parseNum(gv(row,31)),qtdRep:parseNum(gv(row,43)),libImg:parseNum(gv(row,41)),libAmostra:parseNum(gv(row,29)),analCom,plotadoMS,statusImg,dir:getDir(cat)};
+      campMap[String(id).trim()]={camp,sd,sdDate:parseSD(sd),qtdImg:parseNum(gv(row,31)),qtdRep:parseNum(gv(row,43)),libImg:parseNum(gv(row,41)),libAmostra:parseNum(gv(row,29)),analCom,plotadoMS,statusImg,dir:getDir(cat)};
       campanhas.push({id,sd,camp,fiab,cat,analCom,qtdImg,qtdRep,libImg,libRep,libAmostra,temImg,temRep,repJaPlotado,temSub,rowIndex:r+1});
     }
     log(`${campanhas.length} campanhas elegíveis | descartadas: semId=${_semId} semCamp=${_semCamp} fiabBaixa=${_fiabBaixa} jaPlotadoMS=${_plotadoCount} semProcesso=${_semProcesso}`);
@@ -1950,7 +1950,13 @@ function extrairQuebras(rows) {
       const id=(row[b.idCol]||'').trim(); if(!id) continue;
       const status=(row[b.statCol]||'').trim().toLowerCase();
       const job=(row[b.jobCol]||'').trim().toLowerCase();
-      if(!STATUS_QUEBRA.some(s=>status.includes(s))) continue;
+      const ehSubidaMS = job==='subida ms';
+      // Subida MS: toda linha com status != ok conta. Demais jobs: lista de status de quebra.
+      if(ehSubidaMS){
+        if(!status || status==='ok') continue;
+      } else {
+        if(!STATUS_QUEBRA.some(s=>status.includes(s))) continue;
+      }
       const isVal=job.includes('valida')||job.includes('imagem')||job.includes('amostra');
       const campNome=(row[b.campCol]||'').trim();
       const campSD=(row[b.sdCol]||'').trim();
@@ -2042,10 +2048,19 @@ function renderStepBar(step) {
 
 // ── RENDER ────────────────────────────────────────────────────────
 function renderVisao(){
-  const quebrasMS = quebras.filter(q=>q.tipo==='sub').length;
-  const capSubTotal = ANALISTAS_SUB.reduce((s,a)=>s+a.cap,0);
-  let alocadoSub = 0;
-  if(dist) dist.aSub.forEach(a=>{ alocadoSub += a.itens.filter(i=>!i.quebra).length; });
+  const quebrasMS = quebras.filter(q=>(q.job||'').trim().toLowerCase()==='subida ms').length;
+  // Subidas D-0: linhas de Subida MS pendentes com SD na janela
+  // Seg-qui: hoje e amanhã. Sex: sex, sáb, dom e seg.
+  const _hojeD0 = new Date(); _hojeD0.setHours(0,0,0,0);
+  const _fimJanela = new Date(_hojeD0);
+  if(_hojeD0.getDay()===5) _fimJanela.setDate(_fimJanela.getDate()+3); // sexta -> até segunda
+  else _fimJanela.setDate(_fimJanela.getDate()+1);                     // demais -> até amanhã
+  const subidasD0 = quebras.filter(q=>{
+    if((q.job||'').trim().toLowerCase()!=='subida ms') return false;
+    const cd = campMap[String(q.campanha).trim()];
+    const sdDt = cd ? cd.sdDate : parseSD(q.campSD);
+    return sdDt && sdDt>=_hojeD0 && sdDt<=_fimJanela;
+  }).length;
   const sortedMetric = [...campanhas].sort((a,b)=>{
     const da=a.sd.split('/').slice(0,2).reverse().join('');
     const db=b.sd.split('/').slice(0,2).reverse().join('');
@@ -2054,9 +2069,10 @@ function renderVisao(){
   const maisUrgente = sortedMetric[0] ? sortedMetric[0].sd.substring(0,5) : '—';
   // Recorte de período: de hoje até a data escolhida (ignora o que já passou)
   const _hoje0 = new Date(); _hoje0.setHours(0,0,0,0);
+  const _mesCorrente = new Date().getMonth()+1;
   const mesScope = periodoMS
     ? mesMap.filter(c=> c.sdDate && c.sdDate >= _hoje0 && c.sdDate <= periodoMS)
-    : mesMap;
+    : mesMap.filter(c=> c.sdMes===_mesCorrente);
   const totalMes = mesScope.length;
   const plotadosMes = mesScope.filter(c=>c.plotado).length;
   const faltaMes = totalMes - plotadosMes;
@@ -2068,8 +2084,15 @@ function renderVisao(){
   const hoje = new Date();
   const ano = hoje.getFullYear(), mes = hoje.getMonth();
   let diasUteis = 0;
-  const ultimoDia = new Date(ano, mes+1, 0).getDate();
-  for(let d=1; d<=ultimoDia; d++){ const dow = new Date(ano, mes, d).getDay(); if(dow!==0 && dow!==6) diasUteis++; }
+  if(periodoMS){
+    // dias úteis de hoje até a data escolhida
+    const _d = new Date(_hoje0);
+    while(_d <= periodoMS){ const dow=_d.getDay(); if(dow!==0&&dow!==6) diasUteis++; _d.setDate(_d.getDate()+1); }
+  } else {
+    // mês cheio
+    const ultimoDia = new Date(ano, mes+1, 0).getDate();
+    for(let d=1; d<=ultimoDia; d++){ const dow = new Date(ano, mes, d).getDay(); if(dow!==0 && dow!==6) diasUteis++; }
+  }
   const capMes = diasUteis * 2 * ANALISTAS_SUB.length;
   const metric = (label, value, sub, cor) => `<div style="${S.metric}">
     <div style="${S.label}">${label}</div>
@@ -2079,7 +2102,7 @@ function renderVisao(){
 
   q('metrics-plan').innerHTML =
     metric('Quebras herdadas (MS)', quebrasMS, quebrasMS?'já descontadas da capacidade':'nenhuma pendência de ontem', quebrasMS?'#f0b37e':C.txt) +
-    metric('Subidas D-0', `${alocadoSub}<span style="font-size:18px;color:${C.dim}">/${capSubTotal}</span>`, 'campanhas alocadas / capacidade') +
+    metric('Subidas D-0', subidasD0, _hojeD0.getDay()===5?'Subida MS pendente · sex a seg':'Subida MS pendente · hoje e amanhã') +
     metric('SD mais próximo', maisUrgente, 'próxima data de subida');
 
   // Ritmo necessário: campanhas restantes no período ÷ dias úteis de hoje até a data
@@ -2103,7 +2126,7 @@ function renderVisao(){
 
   q('metrics-gestao').innerHTML =
     ritmoCard +
-    metric('Entregue no mês', `${plotadosMes}<span style="font-size:18px;color:${C.dim}">/${capMes}</span>`, `${diasUteis} dias úteis · capacidade teórica`) +
+    metric(periodoMS?'Entregue no período':'Entregue no mês', `${plotadosMes}<span style="font-size:18px;color:${C.dim}">/${capMes}</span>`, `${diasUteis} dias úteis · capacidade teórica`) +
     metric('Backlog validação', backlog.validacao, 'campanhas com imagem a plotar') +
     metric('Auditoria · Auditar Catálogo', backlog.auditarCatalogo, 'aguardando auditoria de catálogo') +
     metric('Auditoria · Não Auditada', backlog.naoAuditada, 'ainda não auditadas');
