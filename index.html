@@ -1806,14 +1806,12 @@ async function carregarDados() {
       if(!camp) {_semCamp++; continue;}
       const sd=gv(row,2);
       const cat=gv(row,7);
-      const statusImgRaw=gv(row,35).toUpperCase();
-      const statusAmostra=gv(row,26).toUpperCase();
       const plotadoMSraw=gv(row,51).toUpperCase();
+      const entregueRaw=gv(row,52).toUpperCase().replace(/\s+/g,' ').trim();
       const _sdMes = parseInt((sd.split('/')[1]||'0'));
-      const _cancelada = statusImgRaw==='CANCELADA'||statusAmostra==='CANCELADA';
-      if(!_cancelada){
-        mesMap.push({id, sd, sdDate:parseSD(sd), sdMes:_sdMes, dir:getDir(cat), plotado:(plotadoMSraw==='TRUE'||plotadoMSraw==='VERDADEIRO')});
-      }
+      mesMap.push({id, sd, sdDate:parseSD(sd), sdMes:_sdMes, dir:getDir(cat),
+        plotado:(plotadoMSraw==='TRUE'||plotadoMSraw==='VERDADEIRO'),
+        entregue:(entregueRaw==='OK'||entregueRaw==='OK- FALTA 100%'||entregueRaw==='OK - FALTA 100%')});
       // Backlogs totais (sem recorte de mês, sem filtros de fiab/AZ)
       if(gv(row,38).toUpperCase()==='PLOTAR') backlog.validacao++;
       const _statusAud = gv(row,16).toUpperCase();
@@ -2061,12 +2059,12 @@ function renderVisao(){
     const sdDt = cd ? cd.sdDate : parseSD(q.campSD);
     return sdDt && sdDt>=_hojeD0 && sdDt<=_fimJanela;
   }).length;
-  const sortedMetric = [...campanhas].sort((a,b)=>{
-    const da=a.sd.split('/').slice(0,2).reverse().join('');
-    const db=b.sd.split('/').slice(0,2).reverse().join('');
-    return da.localeCompare(db);
-  });
-  const maisUrgente = sortedMetric[0] ? sortedMetric[0].sd.substring(0,5) : '—';
+  const _hojeSD = new Date(); _hojeSD.setHours(0,0,0,0);
+  const sortedMetric = campanhas
+    .map(c=>({c, dt:parseSD(c.sd)}))
+    .filter(x=>x.dt && x.dt>=_hojeSD)
+    .sort((a,b)=>a.dt-b.dt);
+  const maisUrgente = sortedMetric[0] ? sortedMetric[0].c.sd.substring(0,5) : '—';
   // Recorte de período: de hoje até a data escolhida (ignora o que já passou)
   const _hoje0 = new Date(); _hoje0.setHours(0,0,0,0);
   const _mesCorrente = new Date().getMonth()+1;
@@ -2075,25 +2073,13 @@ function renderVisao(){
     : mesMap.filter(c=> c.sdMes===_mesCorrente);
   const totalMes = mesScope.length;
   const plotadosMes = mesScope.filter(c=>c.plotado).length;
+  const entreguesMes = mesScope.filter(c=>c.entregue).length;
   const faltaMes = totalMes - plotadosMes;
   const pctPlotado = totalMes>0 ? Math.round(plotadosMes/totalMes*100) : 0;
 
   // Faltam plotar no período, por diretoria (mesmo recorte do donut, detalhado)
   const faltaDir = {'Fashion':0,'Kids':0,'Shoes':0,'Home & Decor':0};
   mesScope.forEach(c=>{ if(!c.plotado && faltaDir[c.dir]!==undefined) faltaDir[c.dir]++; });
-  const hoje = new Date();
-  const ano = hoje.getFullYear(), mes = hoje.getMonth();
-  let diasUteis = 0;
-  if(periodoMS){
-    // dias úteis de hoje até a data escolhida
-    const _d = new Date(_hoje0);
-    while(_d <= periodoMS){ const dow=_d.getDay(); if(dow!==0&&dow!==6) diasUteis++; _d.setDate(_d.getDate()+1); }
-  } else {
-    // mês cheio
-    const ultimoDia = new Date(ano, mes+1, 0).getDate();
-    for(let d=1; d<=ultimoDia; d++){ const dow = new Date(ano, mes, d).getDay(); if(dow!==0 && dow!==6) diasUteis++; }
-  }
-  const capMes = diasUteis * 2 * ANALISTAS_SUB.length;
   const metric = (label, value, sub, cor) => `<div style="${S.metric}">
     <div style="${S.label}">${label}</div>
     <div style="${S.value}${cor?'color:'+cor+';':''}">${value}</div>
@@ -2126,7 +2112,8 @@ function renderVisao(){
 
   q('metrics-gestao').innerHTML =
     ritmoCard +
-    metric(periodoMS?'Entregue no período':'Entregue no mês', `${plotadosMes}<span style="font-size:18px;color:${C.dim}">/${capMes}</span>`, `${diasUteis} dias úteis · capacidade teórica`) +
+    metric(periodoMS?'Plotadas no período':'Plotadas no mês', plotadosMes, 'checkbox de plot (AZ) marcado') +
+    metric(periodoMS?'Entregue no período':'Entregue no mês', entreguesMes, 'MS concluído (OK na planilha)') +
     metric('Backlog validação', backlog.validacao, 'campanhas com imagem a plotar') +
     metric('Auditoria · Auditar Catálogo', backlog.auditarCatalogo, 'aguardando auditoria de catálogo') +
     metric('Auditoria · Não Auditada', backlog.naoAuditada, 'ainda não auditadas');
