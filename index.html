@@ -1784,9 +1784,9 @@ async function carregarDados() {
     const calAba = calAbas.find(a=>a.toLowerCase().includes('planejamento'))||calAbas[0];
     log('Usando: '+calAba);
 
-    const rowsRaw = await sheetGet(CAL_ID, `${calAba}!A1:AZ10000`);
-    const rows = rowsRaw.map(row => { const padded=[...row]; while(padded.length<52) padded.push(''); return padded; });
-    log(`${rows.length} linhas lidas (preenchidas até col AZ)`);
+    const rowsRaw = await sheetGet(CAL_ID, `${calAba}!A1:BA10000`);
+    const rows = rowsRaw.map(row => { const padded=[...row]; while(padded.length<53) padded.push(''); return padded; });
+    log(`${rows.length} linhas lidas (preenchidas até col BA)`);
 
     campanhas=[]; campMap={}; mesMap=[];
     backlog={validacao:0, auditarCatalogo:0, naoAuditada:0};
