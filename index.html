@@ -1850,6 +1850,9 @@ async function carregarDados() {
     }
     log(`${campanhas.length} campanhas elegíveis | descartadas: semId=${_semId} semCamp=${_semCamp} fiabBaixa=${_fiabBaixa} jaPlotadoMS=${_plotadoCount} semProcesso=${_semProcesso}`);
     log(`[DBG mês atual] no donut=${_dbgMesOk} | com SD no mês mas SEM id=${_dbgMesSemId} | com mês mas SEM nome=${_dbgMesSemCamp}`);
+    const _idsMes = mesMap.filter(c=>c.sdMes===_mesAtual).map(c=>c.id);
+    log(`[DBG ids mês atual] total=${_idsMes.length}`);
+    console.log('IDs mês atual ('+_idsMes.length+'):', _idsMes.join(', '));
 
     try {
       const timMeta = await sheetMeta(TIM_ID);
