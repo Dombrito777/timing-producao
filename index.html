@@ -1798,7 +1798,7 @@ async function carregarDados() {
       return String(v).trim();
     }
     const _mesAtual = new Date().getMonth()+1;
-    let _dbgMesSemId=0, _dbgMesSemCamp=0, _dbgMesOk=0;
+    let _dbgMesSemId=0, _dbgMesSemCamp=0, _dbgMesOk=0, _dbgAZ={}, _dbgBA={};
     for (let r=3;r<rows.length;r++) {
       const row=rows[r];
       const _sdDbg=gv(row,2); const _mesDbg=parseInt((_sdDbg.split('/')[1]||'0'));
@@ -1811,6 +1811,10 @@ async function carregarDados() {
       const cat=gv(row,7);
       const plotadoMSraw=gv(row,51).toUpperCase();
       const entregueRaw=gv(row,52).toUpperCase().replace(/\s+/g,' ').trim();
+      if(_mesDbg===_mesAtual){
+        _dbgAZ[plotadoMSraw]=(_dbgAZ[plotadoMSraw]||0)+1;
+        _dbgBA[entregueRaw]=(_dbgBA[entregueRaw]||0)+1;
+      }
       const _sdMes = parseInt((sd.split('/')[1]||'0'));
       mesMap.push({id, sd, sdDate:parseSD(sd), sdMes:_sdMes, dir:getDir(cat),
         plotado:(plotadoMSraw==='TRUE'||plotadoMSraw==='VERDADEIRO'),
@@ -1850,9 +1854,8 @@ async function carregarDados() {
     }
     log(`${campanhas.length} campanhas elegíveis | descartadas: semId=${_semId} semCamp=${_semCamp} fiabBaixa=${_fiabBaixa} jaPlotadoMS=${_plotadoCount} semProcesso=${_semProcesso}`);
     log(`[DBG mês atual] no donut=${_dbgMesOk} | com SD no mês mas SEM id=${_dbgMesSemId} | com mês mas SEM nome=${_dbgMesSemCamp}`);
-    const _idsMes = mesMap.filter(c=>c.sdMes===_mesAtual).map(c=>c.id);
-    log(`[DBG ids mês atual] total=${_idsMes.length}`);
-    console.log('IDs mês atual ('+_idsMes.length+'):', _idsMes.join(', '));
+    console.log('[DBG AZ - coluna plotado] valores no mês:', _dbgAZ);
+    console.log('[DBG BA - coluna entregue] valores no mês:', _dbgBA);
 
     try {
       const timMeta = await sheetMeta(TIM_ID);
